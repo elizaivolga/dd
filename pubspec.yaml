@@ -1,0 +1,66 @@
+name: plana
+description: A new Flutter planner application for Android
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # База данных
+  sqflite: ^2.3.0
+  path: ^1.8.3
+
+  # Управление состоянием
+  provider: ^6.1.1
+
+  # Календарь и работа с датами
+  table_calendar: ^3.0.9
+  intl: ^0.18.1
+
+  # Графики и статистика
+  fl_chart: ^0.65.0
+
+  # Хранение настроек
+  shared_preferences: ^2.2.2
+
+  # Работа с изображениями
+  image_picker: ^0.8.6+4  # Понижаем версию
+  cached_network_image: ^3.2.3  # Понижаем версию
+
+  # UI компоненты
+  material_design_icons_flutter: ^7.0.7296
+  google_fonts: ^6.1.0
+  flutter_slidable: ^3.0.1
+
+  # Анимации
+  animations: ^2.0.11
+
+  # Уведомления
+  awesome_notifications: ^0.7.4+1  # Заменяем flutter_local_notifications
+
+  # Форматирование и валидация
+  json_annotation: ^4.8.1
+  uuid: ^4.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+  build_runner: ^2.4.8
+  json_serializable: ^6.7.1
+  mockito: ^5.4.4
+  integration_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  generate: true
+
+  assets:
+    - assets/images/
+    - assets/icons/

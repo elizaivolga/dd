@@ -1,0 +1,75 @@
+class Note {
+  final int? id;
+  String title;
+  String content;
+  String category;
+  String? imagePath;
+  DateTime createdAt;
+  DateTime? updatedAt;
+
+  Note({
+    this.id,
+    required this.title,
+    required this.content,
+    required this.category,
+    this.imagePath,
+    DateTime? createdAt,
+    this.updatedAt,
+  }) : createdAt = createdAt ?? DateTime.now();
+
+  static const List<String> defaultCategories = [
+    'Личное',
+    'Работа',
+    'Учеба',
+    'Покупки',
+    'Идеи',
+    'Другое',
+  ];
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'title': title,
+      'content': content,
+      'category': category,
+      'imagePath': imagePath,
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt?.toIso8601String(),
+    };
+  }
+
+  static Note fromMap(Map<String, dynamic> map) {
+    return Note(
+      id: map['id'],
+      title: map['title'],
+      content: map['content'],
+      category: map['category'],
+      imagePath: map['imagePath'],
+      createdAt: DateTime.parse(map['createdAt']),
+      updatedAt: map['updatedAt'] != null
+          ? DateTime.parse(map['updatedAt'])
+          : null,
+    );
+  }
+
+  // Добавляем метод copyWith
+  Note copyWith({
+    int? id,
+    String? title,
+    String? content,
+    String? category,
+    String? imagePath,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return Note(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      content: content ?? this.content,
+      category: category ?? this.category,
+      imagePath: imagePath ?? this.imagePath,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+}
