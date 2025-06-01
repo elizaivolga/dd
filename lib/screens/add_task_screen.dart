@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/task.dart';
 import '../database/database_helper.dart';
 import 'package:intl/intl.dart';
+import 'dart:math';
 
 class AddTaskScreen extends StatefulWidget {
   final Task? task;
@@ -71,36 +72,102 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final task = Task(
-        id: widget.task?.id,
-        title: _titleController.text,
-        description: _descriptionController.text.isEmpty ? null : _descriptionController.text,
-        dueDate: _selectedDate,
-        difficulty: _selectedDifficulty,
-        isCompleted: widget.task?.isCompleted ?? false,
-        subTasks: _subTasks,
-        createdAt: widget.task?.createdAt,
-      );
+      // Генерируем уникальный ID для новой задачи, используя timestamp и случайное число
+      final taskId = widget.task?.id ??
+          '${DateTime.now().millisecondsSinceEpoch}_${(1000 + Random().nextInt(9000))}';
 
-      if (widget.task == null) {
-        await _db.insertTask(task);
-      } else {
-        await _db.updateTask(task);
+      // Используем текущее время UTC для новой задачи
+      final now = DateTime.now().toUtc();
+
+      // Для существующей задачи используем её дату создания, для новой - текущее время
+      final createdAt = widget.task?.createdAt ?? now;
+
+      // Убеждаемся, что у нас есть все необходимые данные
+      if (_titleController.text.trim().isEmpty) {
+        throw Exception('Название задачи не может быть пустым');
       }
 
+      // Создаем объект задачи
+      final task = Task(
+        id: taskId,
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim().isEmpty
+            ? null
+            : _descriptionController.text.trim(),
+        dueDate: DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day,
+            23, 59, 59).toUtc(), // Устанавливаем конец дня в UTC
+        isCompleted: widget.task?.isCompleted ?? false,
+        createdAt: createdAt,
+        difficulty: _selectedDifficulty,
+        subTasks: List<String>.from(_subTasks), // Создаем новый список
+        experiencePoints: widget.task?.experiencePoints ?? 0,
+      );
+
+      // Проверяем, что дата выполнения не в прошлом
+      if (task.dueDate.isBefore(now)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Дата выполнения не может быть в прошлом'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Сохраняем задачу в базу данных
+      if (widget.task == null) {
+        // Создание новой задачи
+        final result = await _db.insertTask(task);
+        if (result <= 0) {
+          throw Exception('Не удалось создать задачу');
+        }
+      } else {
+        // Обновление существующей задачи
+        final result = await _db.updateTask(task);
+        if (result <= 0) {
+          throw Exception('Не удалось обновить задачу');
+        }
+      }
+
+      // Если все прошло успешно, закрываем экран
       if (mounted) {
+        // Показываем сообщение об успехе
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                widget.task == null
+                    ? 'Задача успешно создана'
+                    : 'Задача успешно обновлена'
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Возвращаемся на предыдущий экран с результатом true
         Navigator.pop(context, true);
       }
     } catch (e) {
+      // Обработка ошибок
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Ошибка при сохранении задачи: $e'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'OK',
+              textColor: Colors.white,
+              onPressed: () {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              },
+            ),
           ),
         );
       }
     } finally {
+      // Сбрасываем состояние загрузки
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -190,10 +257,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                           title: Text(
                             difficulty == TaskDifficulty.easy ? 'Легкая' :
                             difficulty == TaskDifficulty.medium ? 'Средняя' : 'Сложная',
-                          ),
-                          subtitle: Text(
-                            difficulty == TaskDifficulty.easy ? '+5 XP' :
-                            difficulty == TaskDifficulty.medium ? '+10 XP' : '+15 XP',
                           ),
                           value: difficulty,
                           groupValue: _selectedDifficulty,

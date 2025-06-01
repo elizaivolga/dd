@@ -8,9 +8,6 @@ class StatisticsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Статистика'),
-      ),
       body: FutureBuilder<Map<String, int>>(
         future: DatabaseHelper().getStatistics(DateTime.now()),
         builder: (context, snapshot) {

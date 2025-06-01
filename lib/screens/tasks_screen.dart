@@ -28,20 +28,19 @@ class _TasksScreenState extends State<TasksScreen> {
     if (!mounted) return;
 
     setState(() => _isLoading = true);
+
     try {
       final loadedTasks = await _db.getTasks();
       if (!mounted) return;
 
       setState(() {
         _tasks = loadedTasks;
+        _isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
+      setState(() => _isLoading = false);
       _showErrorSnackBar('Ошибка при загрузке задач: $e');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
     }
   }
 
@@ -56,16 +55,31 @@ class _TasksScreenState extends State<TasksScreen> {
   }
 
   Future<void> _toggleTaskCompletion(Task task) async {
+    // Если задача уже выполнена, ничего не делаем
+    if (task.isCompleted) return;
+
     try {
-      task.isCompleted = !task.isCompleted;
-      await _db.updateTask(task);
+      // Обновляем состояние в UI
+      setState(() {
+        final index = _tasks.indexWhere((t) => t.id == task.id);
+        if (index != -1) {
+          _tasks[index] = task.copyWith(isCompleted: true);
+        }
+      });
 
-      if (task.isCompleted) {
-        await _db.completeTask(task.id);
-      }
+      // Сохраняем в базу данных
+      await _db.completeTask(task.id);
 
+      // Перезагружаем задачи для обновления всех данных
       await _loadTasks();
     } catch (e) {
+      // В случае ошибки возвращаем предыдущее состояние
+      setState(() {
+        final index = _tasks.indexWhere((t) => t.id == task.id);
+        if (index != -1) {
+          _tasks[index] = task;
+        }
+      });
       _showErrorSnackBar('Ошибка при обновлении задачи: $e');
     }
   }
@@ -74,9 +88,9 @@ class _TasksScreenState extends State<TasksScreen> {
     try {
       await _db.deleteTask(task.id);
       setState(() {
+        _tasks.removeWhere((t) => t.id == task.id);
         _expandedTasks.remove(task.id);
       });
-      await _loadTasks();
     } catch (e) {
       _showErrorSnackBar('Ошибка при удалении задачи: $e');
     }
@@ -118,7 +132,11 @@ class _TasksScreenState extends State<TasksScreen> {
                   _dateFormat.format(task.dueDate),
                   style: TextStyle(
                     fontSize: 12,
-                    color: task.dueDate.isBefore(DateTime.now()) && !task.isCompleted
+                    color: task.dueDate.isBefore(DateTime(
+                      DateTime.now().year,
+                      DateTime.now().month,
+                      DateTime.now().day,
+                    )) && !task.isCompleted
                         ? Colors.red
                         : Colors.grey[600],
                   ),
@@ -144,14 +162,14 @@ class _TasksScreenState extends State<TasksScreen> {
                       });
                     },
                   ),
-                IconButton(
-                  icon: Icon(
-                    task.isCompleted
-                        ? Icons.check_box
-                        : Icons.check_box_outline_blank,
-                    color: task.isCompleted ? Colors.green : Colors.grey,
-                  ),
-                  onPressed: () => _toggleTaskCompletion(task),
+                Checkbox(
+                  value: task.isCompleted,
+                  onChanged: task.isCompleted ? null : (bool? value) {
+                    if (value == true) {
+                      _toggleTaskCompletion(task);
+                    }
+                  },
+                  activeColor: Colors.green,
                 ),
                 IconButton(
                   icon: const Icon(
@@ -163,14 +181,16 @@ class _TasksScreenState extends State<TasksScreen> {
               ],
             ),
             onTap: () async {
-              final result = await Navigator.push<bool>(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => AddTaskScreen(task: task),
-                ),
-              );
-              if (result == true) {
-                await _loadTasks();
+              if (!task.isCompleted) {
+                final result = await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AddTaskScreen(task: task),
+                  ),
+                );
+                if (result == true) {
+                  await _loadTasks();
+                }
               }
             },
           ),

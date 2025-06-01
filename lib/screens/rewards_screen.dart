@@ -8,9 +8,6 @@ class RewardsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Награды'),
-      ),
       body: FutureBuilder<Experience?>(
         future: DatabaseHelper().getExperience(),
         builder: (context, snapshot) {
@@ -62,10 +59,10 @@ class RewardsScreen extends StatelessWidget {
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
                       children: [
-                        const Icon(
-                          Icons.star,
-                          size: 48.0,
-                          color: Colors.amber,
+                        Image.asset(
+                          'assets/images/1lvl.png',
+                          height: 48.0, // Set the same size as the previous icon
+                          width: 48.0,
                         ),
                         const SizedBox(height: 8.0),
                         Text(
@@ -74,7 +71,7 @@ class RewardsScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 8.0),
                         Text(
-                          'Выполнено первых 100 XP!',
+                          'Взят первый уровень!',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                       ],

@@ -33,24 +33,6 @@ class SettingsScreen extends StatelessWidget {
           ),
           const Divider(),
           ListTile(
-            leading: const Icon(Icons.notifications),
-            title: const Text('Уведомления'),
-            subtitle: const Text('Настройка уведомлений приложения'),
-            onTap: () {
-              // TODO: Добавить настройки уведомлений
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.language),
-            title: const Text('Язык'),
-            subtitle: const Text('Русский'),
-            onTap: () {
-              // TODO: Добавить выбор языка
-            },
-          ),
-          const Divider(),
-          ListTile(
             leading: const Icon(Icons.delete_outline),
             title: const Text('Очистить данные'),
             subtitle: const Text('Удалить все задачи и настройки'),

@@ -2,35 +2,47 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
 enum TaskDifficulty {
-  easy,
-  medium,
-  hard,
+  easy,    // Легкая
+  medium,  // Средняя
+  hard     // Сложная
 }
 
 class Task {
-  String id;
-  String title;
-  String? description;
-  DateTime dueDate;
+  final String id;
+  final String title;
+  final String? description;
+  final DateTime dueDate;
   bool isCompleted;
-  DateTime createdAt;
-  TaskDifficulty difficulty;
-  List<String> subTasks;
+  final DateTime createdAt;
+  final TaskDifficulty difficulty;
+  final List<String> subTasks;
   int experiencePoints;
 
   Task({
-    String? id,
+    required this.id,
     required this.title,
     this.description,
     required this.dueDate,
     this.isCompleted = false,
-    DateTime? createdAt,
-    this.difficulty = TaskDifficulty.medium,
-    List<String>? subTasks,
+    required this.createdAt,
+    this.difficulty = TaskDifficulty.easy,
+    this.subTasks = const [],
     this.experiencePoints = 0,
-  })  : id = id ?? const Uuid().v4(),
-        createdAt = createdAt ?? DateTime.now(),
-        subTasks = subTasks ?? [];
+  });
+
+  // Метод для получения очков опыта в зависимости от сложности
+  int getExperiencePoints() {
+    switch (difficulty) {
+      case TaskDifficulty.easy:
+        return 10;
+      case TaskDifficulty.medium:
+        return 15;
+      case TaskDifficulty.hard:
+        return 20;
+      default:
+        return 10; // По умолчанию как за легкую задачу
+    }
+  }
 
   Color getDifficultyColor() {
     switch (difficulty) {
@@ -104,16 +116,5 @@ class Task {
       subTasks: subTasks ?? this.subTasks,
       experiencePoints: experiencePoints ?? this.experiencePoints,
     );
-  }
-
-  int getExperiencePoints() {
-    switch (difficulty) {
-      case TaskDifficulty.hard:
-        return 100;
-      case TaskDifficulty.medium:
-        return 50;
-      case TaskDifficulty.easy:
-        return 25;
-    }
   }
 }
