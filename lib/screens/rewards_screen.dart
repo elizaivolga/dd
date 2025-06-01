@@ -3,39 +3,41 @@ import '../database/database_helper.dart';
 import '../models/experience.dart';
 
 class RewardsScreen extends StatelessWidget {
+  const RewardsScreen({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Награды'),
+        title: const Text('Награды'),
       ),
       body: FutureBuilder<Experience?>(
         future: DatabaseHelper().getExperience(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator());
           }
 
           final experience = snapshot.data ?? Experience(
-            currentXP: 0,
+            points: 0,
             level: 1,
             lastUpdated: DateTime.now(),
           );
 
           return ListView(
-            padding: EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(16.0),
             children: [
               // Отображение текущего уровня и опыта
               Card(
                 child: Padding(
-                  padding: EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(16.0),
                   child: Column(
                     children: [
                       Text(
                         'Уровень ${experience.level}',
-                        style: Theme.of(context).textTheme.headline5,
+                        style: Theme.of(context).textTheme.headlineSmall,
                       ),
-                      SizedBox(height: 8.0),
+                      const SizedBox(height: 8.0),
                       LinearProgressIndicator(
                         value: experience.getLevelProgress(),
                         backgroundColor: Colors.grey[200],
@@ -43,37 +45,37 @@ class RewardsScreen extends StatelessWidget {
                           Theme.of(context).primaryColor,
                         ),
                       ),
-                      SizedBox(height: 8.0),
+                      const SizedBox(height: 8.0),
                       Text(
-                        'XP: ${experience.currentXP}/${experience.calculateXPForNextLevel()}',
-                        style: Theme.of(context).textTheme.subtitle1,
+                        'XP: ${experience.points}/${experience.calculateXPForNextLevel()}',
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                     ],
                   ),
                 ),
               ),
-              SizedBox(height: 16.0),
+              const SizedBox(height: 16.0),
               // Достижения
-              if (experience.currentXP >= 100)
+              if (experience.points >= 100)
                 Card(
                   child: Padding(
-                    padding: EdgeInsets.all(16.0),
+                    padding: const EdgeInsets.all(16.0),
                     child: Column(
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.star,
                           size: 48.0,
                           color: Colors.amber,
                         ),
-                        SizedBox(height: 8.0),
+                        const SizedBox(height: 8.0),
                         Text(
                           'Начало работы',
-                          style: Theme.of(context).textTheme.headline6,
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
-                        SizedBox(height: 8.0),
+                        const SizedBox(height: 8.0),
                         Text(
                           'Выполнено первых 100 XP!',
-                          style: Theme.of(context).textTheme.subtitle1,
+                          style: Theme.of(context).textTheme.titleMedium,
                         ),
                       ],
                     ),

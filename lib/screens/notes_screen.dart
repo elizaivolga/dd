@@ -4,6 +4,8 @@ import '../models/note.dart';
 import '../database/database_helper.dart';
 
 class NotesScreen extends StatefulWidget {
+  const NotesScreen({Key? key}) : super(key: key);
+
   @override
   State<NotesScreen> createState() => _NotesScreenState();
 }
@@ -12,6 +14,7 @@ class _NotesScreenState extends State<NotesScreen> {
   List<Note> _notes = [];
   String _selectedCategory = Note.defaultCategories.first;
   final ImagePicker _imagePicker = ImagePicker();
+  final DatabaseHelper _db = DatabaseHelper();
 
   @override
   void initState() {
@@ -20,12 +23,25 @@ class _NotesScreenState extends State<NotesScreen> {
   }
 
   Future<void> _loadNotes() async {
-    final notes = await DatabaseHelper.instance.getNotes(
-      category: _selectedCategory == 'Все' ? null : _selectedCategory,
-    );
-    setState(() {
-      _notes = notes;
-    });
+    try {
+      final notes = await _db.getNotes();
+      if (mounted) {
+        setState(() {
+          _notes = _selectedCategory == 'Все'
+              ? notes
+              : notes.where((note) => note.category == _selectedCategory).toList();
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка при загрузке заметок: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -46,12 +62,12 @@ class _NotesScreenState extends State<NotesScreen> {
                 value: 'Все',
                 child: Text('Все категории'),
               ),
-              ...Note.defaultCategories.map((category) =>
-                  PopupMenuItem(
-                    value: category,
-                    child: Text(category),
-                  ),
-              ),
+              ...Note.defaultCategories
+                  .where((category) => category != 'Все')
+                  .map((category) => PopupMenuItem(
+                value: category,
+                child: Text(category),
+              )),
             ],
           ),
         ],
@@ -65,18 +81,29 @@ class _NotesScreenState extends State<NotesScreen> {
   }
 
   Widget _buildEmptyState() {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
             Icons.note_add,
             size: 64,
-            color: Colors.grey,
+            color: Colors.grey[400],
           ),
-          SizedBox(height: 16),
-          Text('Нет заметок'),
-          Text('Нажмите + чтобы добавить заметку'),
+          const SizedBox(height: 16),
+          Text(
+            'Нет заметок',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Нажмите + чтобы добавить заметку',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Colors.grey[600],
+            ),
+          ),
         ],
       ),
     );
@@ -91,10 +118,23 @@ class _NotesScreenState extends State<NotesScreen> {
         return Card(
           child: ListTile(
             title: Text(note.title),
-            subtitle: Text(
-              note.content,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  note.content,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  note.category,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
             ),
             trailing: IconButton(
               icon: const Icon(Icons.delete),
@@ -110,71 +150,110 @@ class _NotesScreenState extends State<NotesScreen> {
   Future<void> _showNoteDialog({Note? note}) async {
     final titleController = TextEditingController(text: note?.title ?? '');
     final contentController = TextEditingController(text: note?.content ?? '');
-    var selectedCategory = note?.category ?? _selectedCategory;
+    String selectedCategory = note?.category ?? _selectedCategory;
     String? imagePath = note?.imagePath;
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(note == null ? 'Новая заметка' : 'Редактировать заметку'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                decoration: const InputDecoration(labelText: 'Заголовок'),
-              ),
-              TextField(
-                controller: contentController,
-                decoration: const InputDecoration(labelText: 'Содержание'),
-                maxLines: 3,
-              ),
-              DropdownButtonFormField<String>(
-                value: selectedCategory,
-                items: Note.defaultCategories.map((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text(note == null ? 'Новая заметка' : 'Редактировать заметку'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Заголовок',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: contentController,
+                  decoration: const InputDecoration(
+                    labelText: 'Содержание',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedCategory,
+                  decoration: const InputDecoration(
+                    labelText: 'Категория',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: Note.defaultCategories
+                      .where((category) => category != 'Все')
+                      .map((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(value),
+                    );
+                  }).toList(),
+                  onChanged: (String? value) {
+                    if (value != null) {
+                      setState(() => selectedCategory = value);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Отмена'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (titleController.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Введите заголовок заметки'),
+                      backgroundColor: Colors.red,
+                    ),
                   );
-                }).toList(),
-                onChanged: (String? value) {
-                  if (value != null) {
-                    selectedCategory = value;
-                  }
-                },
-              ),
-            ],
-          ),
+                  return;
+                }
+                Navigator.pop(context, true);
+              },
+              child: const Text('Сохранить'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Сохранить'),
-          ),
-        ],
       ),
     );
 
     if (result == true) {
-      final newNote = Note(
-        id: note?.id,
-        title: titleController.text,
-        content: contentController.text,
-        category: selectedCategory,
-        imagePath: imagePath,
-      );
+      try {
+        final newNote = Note(
+          id: note?.id,
+          title: titleController.text,
+          content: contentController.text,
+          category: selectedCategory,
+          imagePath: imagePath,
+          updatedAt: DateTime.now(),
+        );
 
-      if (note == null) {
-        await DatabaseHelper.instance.insertNote(newNote);
-      } else {
-        await DatabaseHelper.instance.updateNote(newNote);
+        if (note == null) {
+          await _db.insertNote(newNote);
+        } else {
+          await _db.updateNote(newNote);
+        }
+        _loadNotes();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Ошибка при сохранении заметки: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
-      _loadNotes();
     }
   }
 
@@ -191,6 +270,7 @@ class _NotesScreenState extends State<NotesScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Удалить'),
           ),
         ],
@@ -198,8 +278,19 @@ class _NotesScreenState extends State<NotesScreen> {
     );
 
     if (confirmed == true) {
-      await DatabaseHelper.instance.deleteNote(note.id!);
-      _loadNotes();
+      try {
+        await _db.deleteNote(note.id);
+        _loadNotes();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Ошибка при удалении заметки: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 }

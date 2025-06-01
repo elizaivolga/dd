@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/task.dart';
-import '../models/sub_task.dart';
-import '../services/database_service.dart';
+import '../database/database_helper.dart';
 
 class TaskCard extends StatefulWidget {
   final Task task;
@@ -23,8 +22,7 @@ class TaskCard extends StatefulWidget {
 }
 
 class _TaskCardState extends State<TaskCard> {
-  final DatabaseService _databaseService = DatabaseService();
-  List<SubTask> _subTasks = [];
+  final DatabaseHelper _db = DatabaseHelper();
   bool _isExpanded = false;
   final TextEditingController _subTaskController = TextEditingController();
 
@@ -32,73 +30,72 @@ class _TaskCardState extends State<TaskCard> {
   void initState() {
     super.initState();
     _isExpanded = widget.isExpanded;
-    _loadSubTasks();
   }
 
-  Future<void> _loadSubTasks() async {
-    final subTasks = await _databaseService.getSubTasks(widget.task.id);
-    setState(() {
-      _subTasks = subTasks;
-    });
-  }
-
-  Color _getPriorityColor(String? priority) {
-    switch (priority) {
-      case 'high':
+  Color _getDifficultyColor(TaskDifficulty difficulty) {
+    switch (difficulty) {
+      case TaskDifficulty.hard:
         return Colors.red.shade100;
-      case 'medium':
+      case TaskDifficulty.medium:
         return Colors.orange.shade100;
-      case 'low':
+      case TaskDifficulty.easy:
         return Colors.green.shade100;
-      default:
-        return Colors.blue.shade100;
     }
   }
 
-  Color _getPriorityIconColor(String? priority) {
-    switch (priority) {
-      case 'high':
+  Color _getDifficultyIconColor(TaskDifficulty difficulty) {
+    switch (difficulty) {
+      case TaskDifficulty.hard:
         return Colors.red;
-      case 'medium':
+      case TaskDifficulty.medium:
         return Colors.orange;
-      case 'low':
+      case TaskDifficulty.easy:
         return Colors.green;
-      default:
-        return Colors.blue;
     }
   }
 
   Future<void> _addSubTask() async {
     if (_subTaskController.text.trim().isEmpty) return;
 
-    final subTask = SubTask(
-      taskId: widget.task.id,
-      title: _subTaskController.text.trim(),
+    final updatedTask = widget.task.copyWith(
+      subTasks: [...widget.task.subTasks, _subTaskController.text.trim()],
     );
 
-    await _databaseService.insertSubTask(subTask);
+    await _db.updateTask(updatedTask);
     _subTaskController.clear();
-    await _loadSubTasks();
+    widget.onTaskUpdated(updatedTask);
   }
 
-  Future<void> _toggleSubTask(SubTask subTask) async {
-    final updatedSubTask = SubTask(
-      id: subTask.id,
-      taskId: subTask.taskId,
-      title: subTask.title,
-      isCompleted: !subTask.isCompleted,
-      createdAt: subTask.createdAt,
-      completedAt: !subTask.isCompleted ? DateTime.now() : null,
+  Future<void> _toggleSubTask(int index) async {
+    final subTasks = List<String>.from(widget.task.subTasks);
+    final taskTitle = subTasks[index];
+
+    // Добавляем или убираем символ выполнения
+    if (taskTitle.startsWith('✓ ')) {
+      subTasks[index] = taskTitle.substring(2);
+    } else {
+      subTasks[index] = '✓ $taskTitle';
+    }
+
+    final updatedTask = widget.task.copyWith(
+      subTasks: subTasks,
+      isCompleted: subTasks.every((task) => task.startsWith('✓ ')),
     );
 
-    await _databaseService.updateSubTask(updatedSubTask);
-    await _loadSubTasks();
+    await _db.updateTask(updatedTask);
+    widget.onTaskUpdated(updatedTask);
+  }
 
-    // Проверяем, все ли подзадачи выполнены
-    if (_subTasks.isNotEmpty && _subTasks.every((st) => st.isCompleted)) {
-      final updatedTask = widget.task.copyWith(isCompleted: true);
-      widget.onTaskUpdated(updatedTask);
-    }
+  Future<void> _deleteSubTask(int index) async {
+    final subTasks = List<String>.from(widget.task.subTasks)..removeAt(index);
+
+    final updatedTask = widget.task.copyWith(
+      subTasks: subTasks,
+      isCompleted: subTasks.every((task) => task.startsWith('✓ ')),
+    );
+
+    await _db.updateTask(updatedTask);
+    widget.onTaskUpdated(updatedTask);
   }
 
   @override
@@ -124,12 +121,12 @@ class _TaskCardState extends State<TaskCard> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: _getPriorityColor(widget.task.priority),
+                color: _getDifficultyColor(widget.task.difficulty),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
                 widget.task.isCompleted ? Icons.check_circle : Icons.circle_outlined,
-                color: _getPriorityIconColor(widget.task.priority),
+                color: _getDifficultyIconColor(widget.task.difficulty),
               ),
             ),
             title: Text(
@@ -166,7 +163,7 @@ class _TaskCardState extends State<TaskCard> {
                             : Colors.grey[600],
                       ),
                     ),
-                    if (_subTasks.isNotEmpty) ...[
+                    if (widget.task.subTasks.isNotEmpty) ...[
                       const SizedBox(width: 12),
                       Icon(
                         Icons.checklist,
@@ -175,7 +172,7 @@ class _TaskCardState extends State<TaskCard> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${_subTasks.where((st) => st.isCompleted).length}/${_subTasks.length}',
+                        '${widget.task.subTasks.where((task) => task.startsWith('✓ ')).length}/${widget.task.subTasks.length}',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[600],
@@ -251,11 +248,14 @@ class _TaskCardState extends State<TaskCard> {
                   ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _subTasks.length,
+                    itemCount: widget.task.subTasks.length,
                     itemBuilder: (context, index) {
-                      final subTask = _subTasks[index];
+                      final subTask = widget.task.subTasks[index];
+                      final isCompleted = subTask.startsWith('✓ ');
+                      final title = isCompleted ? subTask.substring(2) : subTask;
+
                       return Dismissible(
-                        key: Key(subTask.id),
+                        key: Key('$index'),
                         direction: DismissDirection.endToStart,
                         background: Container(
                           alignment: Alignment.centerRight,
@@ -266,20 +266,17 @@ class _TaskCardState extends State<TaskCard> {
                             color: Colors.white,
                           ),
                         ),
-                        onDismissed: (_) async {
-                          await _databaseService.deleteSubTask(subTask.id);
-                          await _loadSubTasks();
-                        },
+                        onDismissed: (_) => _deleteSubTask(index),
                         child: CheckboxListTile(
-                          value: subTask.isCompleted,
-                          onChanged: (_) => _toggleSubTask(subTask),
+                          value: isCompleted,
+                          onChanged: (_) => _toggleSubTask(index),
                           title: Text(
-                            subTask.title,
+                            title,
                             style: TextStyle(
-                              decoration: subTask.isCompleted
+                              decoration: isCompleted
                                   ? TextDecoration.lineThrough
                                   : null,
-                              color: subTask.isCompleted
+                              color: isCompleted
                                   ? Colors.grey
                                   : Colors.black87,
                             ),

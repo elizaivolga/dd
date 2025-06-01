@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/task.dart';
-import '../database/database_helper.dart'; // Заменяем DatabaseService на DatabaseHelper
+import '../database/database_helper.dart';
 import '../screens/tasks_screen.dart';
 import '../screens/calendar_screen.dart';
 import '../screens/notes_screen.dart';
 import '../screens/rewards_screen.dart';
 import '../screens/statistics_screen.dart';
-
+import '../screens/add_task_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -19,16 +19,16 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   final List<Task> _tasks = [];
-  final DatabaseHelper _databaseHelper = DatabaseHelper(); // Используем DatabaseHelper
+  final DatabaseHelper _databaseHelper = DatabaseHelper();
   DateTime _selectedDate = DateTime.now();
   final DateFormat _dateFormat = DateFormat('dd MMMM yyyy', 'ru');
 
   final List<Widget> _screens = [
-    const TasksTab(),
-    const CalendarScreen(),
-    const NotesScreen(),
-    const RewardsScreen(),
-    const StatisticsScreen(),
+    TasksScreen(), // Убрали const
+    CalendarScreen(),
+    NotesScreen(),
+    RewardsScreen(),
+    StatisticsScreen(),
   ];
 
   final List<String> _titles = [
@@ -84,11 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _deleteTask(String taskId) async {
     try {
-      await _databaseHelper.delete(
-        'tasks',
-        where: 'id = ?',
-        whereArgs: [taskId],
-      );
+      await _databaseHelper.deleteTask(taskId);
       await _loadTasks();
 
       if (mounted) {
@@ -110,12 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _toggleTaskCompletion(Task task) async {
     try {
       task.isCompleted = !task.isCompleted;
-      await _databaseHelper.update(
-        'tasks',
-        task.toMap(),
-        where: 'id = ?',
-        whereArgs: [task.id],
-      );
+      await _databaseHelper.updateTask(task);
       await _loadTasks();
     } catch (e) {
       if (mounted) {
@@ -171,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
       itemBuilder: (context, index) {
         final task = filteredTasks[index];
         return Dismissible(
-          key: Key(task.id ?? ''),
+          key: Key(task.id),
           background: Container(
             color: Colors.red,
             alignment: Alignment.centerRight,
@@ -183,15 +174,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           direction: DismissDirection.endToStart,
           onDismissed: (direction) {
-            if (task.id != null) {
-              _deleteTask(task.id!);
-            }
+            _deleteTask(task.id);
           },
           child: Card(
             margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: ListTile(
               leading: CircleAvatar(
-                backgroundColor: _getPriorityColor(task.priority),
+                backgroundColor: task.getDifficultyColor(),
                 child: Icon(
                   task.isCompleted ? Icons.check : Icons.assignment,
                   color: Colors.white,
@@ -231,27 +220,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-              onTap: () {
-                // TODO: Добавить редактирование задачи
+              onTap: () async {
+                final result = await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AddTaskScreen(task: task),
+                  ),
+                );
+                if (result == true) {
+                  await _loadTasks();
+                }
               },
             ),
           ),
         );
       },
     );
-  }
-
-  Color _getPriorityColor(String? priority) {
-    switch (priority) {
-      case 'high':
-        return Colors.red;
-      case 'medium':
-        return Colors.orange;
-      case 'low':
-        return Colors.green;
-      default:
-        return Colors.blue;
-    }
   }
 
   @override
@@ -331,14 +315,18 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: _selectedIndex == 0
           ? FloatingActionButton(
-        onPressed: () {
-          showDialog(
-            context: context,
-            builder: (context) => AddTaskDialog(
-              onTaskAdded: _addTask,
-              selectedDate: _selectedDate,
+        onPressed: () async {
+          final result = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AddTaskScreen(
+                initialDate: _selectedDate,
+              ),
             ),
           );
+          if (result == true) {
+            await _loadTasks();
+          }
         },
         child: const Icon(Icons.add),
       )

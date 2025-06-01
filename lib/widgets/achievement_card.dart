@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/achievement.dart';
 
 class AchievementCard extends StatelessWidget {
-  final UserAchievement achievement;
+  final Achievement achievement;
   final int currentXP;
 
   const AchievementCard({
@@ -24,6 +24,7 @@ class AchievementCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Stack(
@@ -64,12 +65,26 @@ class AchievementCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 8),
-            if (!isUnlocked)
+            if (!isUnlocked) ...[
               LinearProgressIndicator(
                 value: progress.clamp(0.0, 1.0),
                 backgroundColor: Colors.grey[300],
                 valueColor: AlwaysStoppedAnimation<Color>(
                   Theme.of(context).primaryColor,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${currentXP}/${achievement.xpRequired} XP',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.grey[600],
+                ),
+              ),
+            ] else
+              Text(
+                'Получено ${achievement.unlockedAt?.toString().split(' ')[0] ?? ''}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.green,
                 ),
               ),
           ],

@@ -223,6 +223,50 @@ class DatabaseHelper {
     return maps.map((map) => Event.fromMap(map)).toList();
   }
 
+  Future<int> deleteEvent(String eventId) async {
+    final db = await database;
+    return await db.delete(
+      'events',
+      where: 'id = ?',
+      whereArgs: [eventId],
+    );
+  }
+
+  // Операции с заметками
+  Future<int> insertNote(Note note) async {
+    final db = await database;
+    return await db.insert('notes', note.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<Note>> getNotes() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'notes',
+      orderBy: 'createdAt DESC',
+    );
+
+    return maps.map((map) => Note.fromMap(map)).toList();
+  }
+
+  Future<int> updateNote(Note note) async {
+    final db = await database;
+    return await db.update(
+      'notes',
+      note.toMap(),
+      where: 'id = ?',
+      whereArgs: [note.id],
+    );
+  }
+
+  Future<int> deleteNote(String noteId) async {
+    final db = await database;
+    return await db.delete(
+      'notes',
+      where: 'id = ?',
+      whereArgs: [noteId],
+    );
+  }
+
   // Операции с опытом
   Future<Experience?> getExperience() async {
     final db = await database;
@@ -289,22 +333,6 @@ class DatabaseHelper {
     );
   }
 
-  // Операции с заметками
-  Future<int> insertNote(Note note) async {
-    final db = await database;
-    return await db.insert('notes', note.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  Future<List<Note>> getNotes() async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'notes',
-      orderBy: 'createdAt DESC',
-    );
-
-    return maps.map((map) => Note.fromMap(map)).toList();
-  }
-
   // Операции с достижениями
   Future<void> unlockAchievement(String achievementId) async {
     final db = await database;
@@ -363,7 +391,7 @@ class DatabaseHelper {
   }
 
   // Служебные методы
-  Future<void> deleteDatabase() async {
+  Future<void> clearDatabase() async {
     final db = await database;
     await db.transaction((txn) async {
       await txn.execute('DROP TABLE IF EXISTS tasks');

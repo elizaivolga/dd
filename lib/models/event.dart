@@ -17,7 +17,7 @@ class Event {
     required this.startTime,
     required this.endTime,
     this.location,
-    this.color,
+    this.color = Colors.blue,
   }) : id = id ?? const Uuid().v4();
 
   Map<String, dynamic> toMap() {

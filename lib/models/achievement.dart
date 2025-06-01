@@ -1,39 +1,31 @@
-import 'package:uuid/uuid.dart';
-
 class Achievement {
   final String id;
   final String title;
   final String description;
-  final String type;
-  final int progress;
-  final int target;
+  final String iconPath;
+  final int xpRequired;
   final bool isUnlocked;
   final DateTime? unlockedAt;
-  final String? icon;
 
-  Achievement({
-    String? id,
+  const Achievement({
+    required this.id,
     required this.title,
     required this.description,
-    required this.type,
-    this.progress = 0,
-    required this.target,
+    required this.iconPath,
+    required this.xpRequired,
     this.isUnlocked = false,
     this.unlockedAt,
-    this.icon,
-  }) : id = id ?? const Uuid().v4();
+  });
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'title': title,
       'description': description,
-      'type': type,
-      'progress': progress,
-      'target': target,
+      'iconPath': iconPath,
+      'xpRequired': xpRequired,
       'isUnlocked': isUnlocked ? 1 : 0,
       'unlockedAt': unlockedAt?.toIso8601String(),
-      'icon': icon,
     };
   }
 
@@ -42,37 +34,32 @@ class Achievement {
       id: map['id'],
       title: map['title'],
       description: map['description'],
-      type: map['type'],
-      progress: map['progress'],
-      target: map['target'],
+      iconPath: map['iconPath'],
+      xpRequired: map['xpRequired'],
       isUnlocked: map['isUnlocked'] == 1,
       unlockedAt: map['unlockedAt'] != null
           ? DateTime.parse(map['unlockedAt'])
           : null,
-      icon: map['icon'],
     );
   }
 
   Achievement copyWith({
+    String? id,
     String? title,
     String? description,
-    String? type,
-    int? progress,
-    int? target,
+    String? iconPath,
+    int? xpRequired,
     bool? isUnlocked,
     DateTime? unlockedAt,
-    String? icon,
   }) {
     return Achievement(
-      id: id,
+      id: id ?? this.id,
       title: title ?? this.title,
       description: description ?? this.description,
-      type: type ?? this.type,
-      progress: progress ?? this.progress,
-      target: target ?? this.target,
+      iconPath: iconPath ?? this.iconPath,
+      xpRequired: xpRequired ?? this.xpRequired,
       isUnlocked: isUnlocked ?? this.isUnlocked,
       unlockedAt: unlockedAt ?? this.unlockedAt,
-      icon: icon ?? this.icon,
     );
   }
 }

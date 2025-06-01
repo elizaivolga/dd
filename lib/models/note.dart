@@ -3,22 +3,30 @@ import 'package:uuid/uuid.dart';
 class Note {
   final String id;
   final String title;
-  final String? content;
+  final String content;
   final String category;
   final String? imagePath;
   final DateTime createdAt;
-  DateTime? updatedAt;
+  final DateTime? updatedAt;
+
+  static const List<String> defaultCategories = [
+    'Все',
+    'Личное',
+    'Работа',
+    'Учеба',
+    'Идеи',
+    'Другое',
+  ];
 
   Note({
     String? id,
     required this.title,
-    this.content,
+    required this.content,
     required this.category,
     this.imagePath,
     DateTime? createdAt,
     this.updatedAt,
-  }) :
-        id = id ?? const Uuid().v4(),
+  })  : id = id ?? const Uuid().v4(),
         createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toMap() {
@@ -33,11 +41,12 @@ class Note {
     };
   }
 
+
   factory Note.fromMap(Map<String, dynamic> map) {
     return Note(
       id: map['id'],
       title: map['title'],
-      content: map['content'],
+      content: map['content'] ?? '',
       category: map['category'],
       imagePath: map['imagePath'],
       createdAt: DateTime.parse(map['createdAt']),

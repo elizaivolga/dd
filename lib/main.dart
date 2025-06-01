@@ -1,16 +1,41 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:intl/date_symbol_data_local.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'dart:async';
 import 'screens/home_screen.dart';
 import 'database/database_helper.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('ru_RU', null);
-  // Инициализация базы данных
-  await DatabaseHelper.instance.database;
-  runApp(const MyApp());
+void main() {
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+
+    try {
+      // Создаем экземпляр базы данных
+      final DatabaseHelper db = DatabaseHelper();
+      // Инициализируем базу данных
+      await db.database;
+
+      runApp(const MyApp());
+    } catch (e, stackTrace) {
+      debugPrint('Error during initialization: $e');
+      debugPrint('Stack trace: $stackTrace');
+
+      // Показываем резервный экран с ошибкой
+      runApp(MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Text(
+              'Произошла ошибка при запуске: $e',
+              style: const TextStyle(color: Colors.red),
+            ),
+          ),
+        ),
+      ));
+    }
+  }, (error, stackTrace) {
+    debugPrint('Unhandled error: $error');
+    debugPrint('Stack trace: $stackTrace');
+  });
 }
 
 class MyApp extends StatelessWidget {
@@ -21,6 +46,17 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Plana',
       debugShowCheckedModeBanner: false,
+      // Добавляем поддержку локализации
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('ru', 'RU'),
+        Locale('en', 'US'),
+      ],
+      locale: const Locale('ru', 'RU'),
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.deepPurple,
@@ -107,16 +143,47 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [
-        Locale('ru', 'RU'),
-      ],
-      locale: const Locale('ru', 'RU'),
-      home: const HomeScreen(),
+      home: Builder(
+        builder: (context) {
+          try {
+            return const HomeScreen();
+          } catch (e) {
+            debugPrint('Error building HomeScreen: $e');
+            return Scaffold(
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Colors.red,
+                      size: 48,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Ошибка при загрузке экрана: $e',
+                      style: const TextStyle(color: Colors.red),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const HomeScreen(),
+                          ),
+                        );
+                      },
+                      child: const Text('Попробовать снова'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+        },
+      ),
     );
   }
 }
