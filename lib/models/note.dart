@@ -10,7 +10,6 @@ class Note {
   final DateTime? updatedAt;
 
   static const List<String> defaultCategories = [
-    'Все',
     'Личное',
     'Работа',
     'Учеба',
@@ -21,12 +20,13 @@ class Note {
   Note({
     String? id,
     required this.title,
-    required this.content,
+    String? content, // Сделали необязательным
     required this.category,
     this.imagePath,
     DateTime? createdAt,
     this.updatedAt,
   })  : id = id ?? const Uuid().v4(),
+        content = content ?? '', // Значение по умолчанию
         createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toMap() {
@@ -41,38 +41,15 @@ class Note {
     };
   }
 
-
   factory Note.fromMap(Map<String, dynamic> map) {
     return Note(
       id: map['id'],
       title: map['title'],
-      content: map['content'] ?? '',
+      content: map['content'],
       category: map['category'],
       imagePath: map['imagePath'],
       createdAt: DateTime.parse(map['createdAt']),
-      updatedAt: map['updatedAt'] != null
-          ? DateTime.parse(map['updatedAt'])
-          : null,
-    );
-  }
-
-  Note copyWith({
-    String? id,
-    String? title,
-    String? content,
-    String? category,
-    String? imagePath,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  }) {
-    return Note(
-      id: id ?? this.id,
-      title: title ?? this.title,
-      content: content ?? this.content,
-      category: category ?? this.category,
-      imagePath: imagePath ?? this.imagePath,
-      createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.updatedAt,
+      updatedAt: map['updatedAt'] != null ? DateTime.parse(map['updatedAt']) : null,
     );
   }
 }

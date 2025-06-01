@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../models/task.dart';
 import '../database/database_helper.dart';
-import '../providers/experience_provider.dart';
 import '../screens/add_task_screen.dart';
 import 'package:intl/intl.dart';
 
@@ -17,8 +15,6 @@ class _TasksScreenState extends State<TasksScreen> {
   final DatabaseHelper _db = DatabaseHelper();
   List<Task> _tasks = [];
   bool _isLoading = false;
-  String _sortBy = 'date';
-  bool _showCompleted = false;
   Set<String> _expandedTasks = {};
   final _dateFormat = DateFormat('dd.MM.yyyy');
 
@@ -38,7 +34,6 @@ class _TasksScreenState extends State<TasksScreen> {
 
       setState(() {
         _tasks = loadedTasks;
-        _sortTasks();
       });
     } catch (e) {
       if (!mounted) return;
@@ -47,22 +42,6 @@ class _TasksScreenState extends State<TasksScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
-    }
-  }
-
-  void _sortTasks() {
-    _tasks.sort((a, b) {
-      if (_sortBy == 'date') {
-        return a.dueDate.compareTo(b.dueDate);
-      } else if (_sortBy == 'difficulty') {
-        return b.difficulty.index.compareTo(a.difficulty.index);
-      } else {
-        return a.title.compareTo(b.title);
-      }
-    });
-
-    if (!_showCompleted) {
-      _tasks = _tasks.where((task) => !task.isCompleted).toList();
     }
   }
 
@@ -198,10 +177,10 @@ class _TasksScreenState extends State<TasksScreen> {
           if (isExpanded && hasSubTasks)
             Container(
               decoration: BoxDecoration(
-                color: Colors.grey[50],
+                color: Theme.of(context).colorScheme.surface,
                 border: Border(
                   top: BorderSide(
-                    color: Colors.grey[300]!,
+                    color: Theme.of(context).dividerColor,
                     width: 1,
                   ),
                 ),
@@ -238,110 +217,34 @@ class _TasksScreenState extends State<TasksScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Задачи'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                builder: (context) => StatefulBuilder(
-                  builder: (context, setState) => Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ListTile(
-                        title: const Text('Сортировать по'),
-                        trailing: DropdownButton<String>(
-                          value: _sortBy,
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'date',
-                              child: Text('Дате'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'difficulty',
-                              child: Text('Сложности'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'title',
-                              child: Text('Названию'),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() => _sortBy = value);
-                              _sortTasks();
-                              if (mounted) {
-                                this.setState(() {});
-                              }
-                            }
-                          },
-                        ),
-                      ),
-                      SwitchListTile(
-                        title: const Text('Показывать выполненные'),
-                        value: _showCompleted,
-                        onChanged: (value) {
-                          setState(() => _showCompleted = value);
-                          _sortTasks();
-                          if (mounted) {
-                            this.setState(() {});
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
+    return _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : _tasks.isEmpty
+        ? Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.task_outlined,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Нет активных задач',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Colors.grey[600],
+            ),
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _tasks.isEmpty
-          ? Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.task_outlined,
-              size: 64,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Нет активных задач',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Colors.grey[600],
-              ),
-            ),
-          ],
-        ),
-      )
-          : RefreshIndicator(
-        onRefresh: _loadTasks,
-        child: ListView.builder(
-          itemCount: _tasks.length,
-          padding: const EdgeInsets.all(8),
-          itemBuilder: (context, index) => _buildTaskCard(_tasks[index]),
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final result = await Navigator.push<bool>(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const AddTaskScreen(),
-            ),
-          );
-          if (result == true) {
-            await _loadTasks();
-          }
-        },
-        child: const Icon(Icons.add),
+    )
+        : RefreshIndicator(
+      onRefresh: _loadTasks,
+      child: ListView.builder(
+        itemCount: _tasks.length,
+        padding: const EdgeInsets.all(8),
+        itemBuilder: (context, index) => _buildTaskCard(_tasks[index]),
       ),
     );
   }

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../models/note.dart';
 import '../database/database_helper.dart';
-import 'dart:io';
-import 'package:image_picker/image_picker.dart';
 
 class AddNoteScreen extends StatefulWidget {
   final Note? note;
@@ -14,21 +14,24 @@ class AddNoteScreen extends StatefulWidget {
 }
 
 class _AddNoteScreenState extends State<AddNoteScreen> {
+  final _titleController = TextEditingController();
+  final _contentController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  late TextEditingController _titleController;
-  late TextEditingController _contentController;
-  String _selectedCategory = 'Другое';
+  final _imagePicker = ImagePicker();
+  final _db = DatabaseHelper();
+
+  String _selectedCategory = Note.defaultCategories.first;
   String? _imagePath;
-  bool _isImageChanged = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.note?.title);
-    _contentController = TextEditingController(text: widget.note?.content);
-    _imagePath = widget.note?.imagePath;
     if (widget.note != null) {
+      _titleController.text = widget.note!.title;
+      _contentController.text = widget.note!.content;
       _selectedCategory = widget.note!.category;
+      _imagePath = widget.note!.imagePath;
     }
   }
 
@@ -41,54 +44,59 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
 
   Future<void> _pickImage() async {
     try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(
+      final XFile? image = await _imagePicker.pickImage(
         source: ImageSource.gallery,
         maxWidth: 1920,
         maxHeight: 1080,
         imageQuality: 85,
       );
-
       if (image != null) {
-        setState(() {
-          _imagePath = image.path;
-          _isImageChanged = true;
-        });
+        setState(() => _imagePath = image.path);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка при выборе изображения: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      _showErrorSnackBar('Ошибка при выборе изображения: $e');
     }
   }
 
-  Future<void> _removeImage() async {
-    if (_imagePath != null) {
-      try {
-        if (_isImageChanged) {
-          final file = File(_imagePath!);
-          if (await file.exists()) {
-            await file.delete();
-          }
-        }
-        setState(() {
-          _imagePath = null;
-        });
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Ошибка при удалении изображения: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _saveNote() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final newNote = Note(
+        id: widget.note?.id,
+        title: _titleController.text.trim(),
+        content: _contentController.text.trim(),
+        category: _selectedCategory,
+        imagePath: _imagePath,
+        updatedAt: DateTime.now(),
+      );
+
+      if (widget.note == null) {
+        await _db.insertNote(newNote);
+      } else {
+        await _db.updateNote(newNote);
       }
+
+      if (mounted) {
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      _showErrorSnackBar('Ошибка при сохранении заметки: $e');
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -98,110 +106,91 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
       appBar: AppBar(
         title: Text(widget.note == null ? 'Новая заметка' : 'Редактировать заметку'),
         actions: [
-          if (widget.note != null)
-            IconButton(
-              icon: const Icon(Icons.delete),
-              onPressed: () async {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Подтверждение'),
-                    content: const Text('Вы уверены, что хотите удалить эту заметку?'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Отмена'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text(
-                          'Удалить',
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-
-                if (confirm == true && mounted) {
-                  try {
-                    final db = DatabaseHelper();
-                    await db.deleteNote(widget.note!.id);
-
-                    if (_imagePath != null) {
-                      final file = File(_imagePath!);
-                      if (await file.exists()) {
-                        await file.delete();
-                      }
-                    }
-
-                    if (mounted) {
-                      Navigator.pop(context, true);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Заметка удалена'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Ошибка при удалении заметки: $e'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
-                }
-              },
-            ),
+          IconButton(
+            icon: const Icon(Icons.check),
+            onPressed: _isLoading ? null : _saveNote,
+          ),
         ],
       ),
-      body: Form(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(16),
           children: [
+            if (_imagePath != null) ...[
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(
+                      File(_imagePath!),
+                      height: 200,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          height: 200,
+                          color: Colors.grey[200],
+                          child: Icon(
+                            Icons.broken_image,
+                            size: 64,
+                            color: Colors.grey[400],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: IconButton.filled(
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        setState(() => _imagePath = null);
+                      },
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.red,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
             TextFormField(
               controller: _titleController,
               decoration: const InputDecoration(
-                labelText: 'Название',
-                hintText: 'Введите название заметки',
+                labelText: 'Заголовок',
+                border: OutlineInputBorder(),
               ),
               validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Пожалуйста, введите название';
+                if (value == null || value.trim().isEmpty) {
+                  return 'Введите заголовок заметки';
                 }
                 return null;
               },
+              textCapitalization: TextCapitalization.sentences,
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               value: _selectedCategory,
               decoration: const InputDecoration(
                 labelText: 'Категория',
-                hintText: 'Выберите категорию',
+                border: OutlineInputBorder(),
               ),
-              items: Note.defaultCategories.map((String category) {
-                return DropdownMenuItem(
-                  value: category,
-                  child: Text(category),
+              items: Note.defaultCategories.map((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(value),
                 );
               }).toList(),
-              onChanged: (String? newValue) {
-                if (newValue != null) {
-                  setState(() {
-                    _selectedCategory = newValue;
-                  });
+              onChanged: (String? value) {
+                if (value != null) {
+                  setState(() => _selectedCategory = value);
                 }
-              },
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Пожалуйста, выберите категорию';
-                }
-                return null;
               },
             ),
             const SizedBox(height: 16),
@@ -209,107 +198,23 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
               controller: _contentController,
               decoration: const InputDecoration(
                 labelText: 'Содержание',
-                hintText: 'Введите текст заметки',
+                border: OutlineInputBorder(),
                 alignLabelWithHint: true,
               ),
-              maxLines: 10,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Пожалуйста, введите текст заметки';
-                }
-                return null;
-              },
+              maxLines: 8,
+              textCapitalization: TextCapitalization.sentences,
             ),
             const SizedBox(height: 16),
-            if (_imagePath != null) ...[
-              Container(
-                height: 200,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Stack(
-                  children: [
-                    Center(
-                      child: Image.file(
-                        File(_imagePath!),
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: _removeImage,
-                        color: Colors.red,
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-            ElevatedButton.icon(
+            OutlinedButton.icon(
               onPressed: _pickImage,
               icon: const Icon(Icons.image),
-              label: Text(_imagePath == null ? 'Добавить изображение' : 'Изменить изображение'),
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: _saveNote,
-              child: Text(widget.note == null ? 'Создать' : 'Сохранить'),
+              label: Text(
+                _imagePath == null ? 'Добавить изображение' : 'Изменить изображение',
+              ),
             ),
           ],
         ),
       ),
     );
-  }
-
-  Future<void> _saveNote() async {
-    if (_formKey.currentState!.validate()) {
-      try {
-        final note = Note(
-          id: widget.note?.id,
-          title: _titleController.text,
-          content: _contentController.text,
-          category: _selectedCategory,
-          imagePath: _imagePath,
-          createdAt: widget.note?.createdAt,
-          updatedAt: DateTime.now(),
-        );
-
-        final db = DatabaseHelper();
-        if (widget.note == null) {
-          await db.insertNote(note);
-        } else {
-          await db.updateNote(note);
-        }
-
-        if (mounted) {
-          Navigator.pop(context, true);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  widget.note == null ? 'Заметка создана' : 'Заметка обновлена'
-              ),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Ошибка при сохранении заметки: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
   }
 }

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../models/note.dart';
 import '../database/database_helper.dart';
+import 'add_note_screen.dart'; // Добавьте этот импорт
 
 class NotesScreen extends StatefulWidget {
   const NotesScreen({Key? key}) : super(key: key);
@@ -12,8 +13,7 @@ class NotesScreen extends StatefulWidget {
 
 class _NotesScreenState extends State<NotesScreen> {
   List<Note> _notes = [];
-  String _selectedCategory = Note.defaultCategories.first;
-  final ImagePicker _imagePicker = ImagePicker();
+  String _selectedCategory = 'Все';
   final DatabaseHelper _db = DatabaseHelper();
 
   @override
@@ -33,49 +33,98 @@ class _NotesScreenState extends State<NotesScreen> {
         });
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка при загрузке заметок: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      _showErrorSnackBar('Ошибка при загрузке заметок: $e');
     }
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Заметки'),
-        actions: [
-          PopupMenuButton<String>(
-            onSelected: (String category) {
-              setState(() {
-                _selectedCategory = category;
-                _loadNotes();
-              });
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'Все',
-                child: Text('Все категории'),
-              ),
-              ...Note.defaultCategories
-                  .where((category) => category != 'Все')
-                  .map((category) => PopupMenuItem(
-                value: category,
-                child: Text(category),
-              )),
-            ],
+      body: Column(
+        children: [
+          _buildCategoryChips(),
+          Expanded(
+            child: _notes.isEmpty ? _buildEmptyState() : _buildNotesList(),
           ),
         ],
       ),
-      body: _notes.isEmpty ? _buildEmptyState() : _buildNotesList(),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showNoteDialog(),
+        onPressed: () async {
+          final result = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const AddNoteScreen(),
+            ),
+          );
+          if (result == true) {
+            _loadNotes();
+          }
+        },
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  Widget _buildCategoryChips() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+          ),
+        ],
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            FilterChip(
+              label: const Text('Все'),
+              selected: _selectedCategory == 'Все',
+              onSelected: (bool selected) {
+                if (selected) {
+                  setState(() {
+                    _selectedCategory = 'Все';
+                    _loadNotes();
+                  });
+                }
+              },
+            ),
+            const SizedBox(width: 8),
+            ...Note.defaultCategories.map((category) {
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilterChip(
+                  label: Text(category),
+                  selected: _selectedCategory == category,
+                  onSelected: (bool selected) {
+                    if (selected) {
+                      setState(() {
+                        _selectedCategory = category;
+                        _loadNotes();
+                      });
+                    }
+                  },
+                ),
+              );
+            }).toList(),
+          ],
+        ),
       ),
     );
   }
@@ -92,7 +141,9 @@ class _NotesScreenState extends State<NotesScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Нет заметок',
+            _selectedCategory == 'Все'
+                ? 'Нет заметок'
+                : 'Нет заметок в категории "$_selectedCategory"',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               color: Colors.grey[600],
             ),
@@ -115,182 +166,153 @@ class _NotesScreenState extends State<NotesScreen> {
       padding: const EdgeInsets.all(8),
       itemBuilder: (context, index) {
         final note = _notes[index];
-        return Card(
-          child: ListTile(
-            title: Text(note.title),
-            subtitle: Column(
+        return Dismissible(
+          key: Key(note.id),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20),
+            color: Colors.red,
+            child: const Icon(
+              Icons.delete,
+              color: Colors.white,
+            ),
+          ),
+          onDismissed: (_) => _deleteNote(note),
+          child: Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  note.content,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  note.category,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
+                if (note.imagePath != null) ...[
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(4),
+                    ),
+                    child: Image.file(
+                      File(note.imagePath!),
+                      height: 200,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          height: 200,
+                          color: Colors.grey[200],
+                          child: Icon(
+                            Icons.broken_image,
+                            size: 64,
+                            color: Colors.grey[400],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+                InkWell(
+                  onTap: () async {
+                    final result = await Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AddNoteScreen(note: note),
+                      ),
+                    );
+                    if (result == true) {
+                      _loadNotes();
+                    }
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          note.title,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (note.content.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            note.content,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[200],
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                note.category,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[800],
+                                ),
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              _formatDate(note.updatedAt ?? note.createdAt),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
             ),
-            trailing: IconButton(
-              icon: const Icon(Icons.delete),
-              onPressed: () => _deleteNote(note),
-            ),
-            onTap: () => _showNoteDialog(note: note),
           ),
         );
       },
     );
   }
 
-  Future<void> _showNoteDialog({Note? note}) async {
-    final titleController = TextEditingController(text: note?.title ?? '');
-    final contentController = TextEditingController(text: note?.content ?? '');
-    String selectedCategory = note?.category ?? _selectedCategory;
-    String? imagePath = note?.imagePath;
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text(note == null ? 'Новая заметка' : 'Редактировать заметку'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(
-                    labelText: 'Заголовок',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: contentController,
-                  decoration: const InputDecoration(
-                    labelText: 'Содержание',
-                    border: OutlineInputBorder(),
-                  ),
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: selectedCategory,
-                  decoration: const InputDecoration(
-                    labelText: 'Категория',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: Note.defaultCategories
-                      .where((category) => category != 'Все')
-                      .map((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList(),
-                  onChanged: (String? value) {
-                    if (value != null) {
-                      setState(() => selectedCategory = value);
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Отмена'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (titleController.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Введите заголовок заметки'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                  return;
-                }
-                Navigator.pop(context, true);
-              },
-              child: const Text('Сохранить'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (result == true) {
-      try {
-        final newNote = Note(
-          id: note?.id,
-          title: titleController.text,
-          content: contentController.text,
-          category: selectedCategory,
-          imagePath: imagePath,
-          updatedAt: DateTime.now(),
-        );
-
-        if (note == null) {
-          await _db.insertNote(newNote);
-        } else {
-          await _db.updateNote(newNote);
-        }
-        _loadNotes();
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Ошибка при сохранении заметки: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
+  String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
   }
 
   Future<void> _deleteNote(Note note) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Удалить заметку?'),
-        content: const Text('Это действие нельзя отменить'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      try {
-        await _db.deleteNote(note.id);
-        _loadNotes();
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Ошибка при удалении заметки: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
+    try {
+      if (note.imagePath != null) {
+        final file = File(note.imagePath!);
+        if (await file.exists()) {
+          await file.delete();
         }
       }
+      await _db.deleteNote(note.id);
+      _showSuccessSnackBar('Заметка удалена');
+      _loadNotes();
+    } catch (e) {
+      _showErrorSnackBar('Ошибка при удалении заметки: $e');
     }
+  }
+
+  void _showSuccessSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 }

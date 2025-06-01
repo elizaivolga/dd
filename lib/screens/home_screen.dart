@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/task.dart';
+import '../models/experience.dart';
 import '../database/database_helper.dart';
-import '../screens/tasks_screen.dart';
-import '../screens/calendar_screen.dart';
-import '../screens/notes_screen.dart';
-import '../screens/rewards_screen.dart';
-import '../screens/statistics_screen.dart';
-import '../screens/add_task_screen.dart';
+import 'tasks_screen.dart';
+import 'calendar_screen.dart';
+import 'notes_screen.dart';
+import 'rewards_screen.dart';
+import 'statistics_screen.dart';
+import 'add_task_screen.dart';
+import 'settings_screen.dart';
+import 'about_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -24,11 +27,11 @@ class _HomeScreenState extends State<HomeScreen> {
   final DateFormat _dateFormat = DateFormat('dd MMMM yyyy', 'ru');
 
   final List<Widget> _screens = [
-    TasksScreen(), // Убрали const
-    CalendarScreen(),
-    NotesScreen(),
-    RewardsScreen(),
-    StatisticsScreen(),
+    const TasksScreen(),
+    const CalendarScreen(),
+    const NotesScreen(),
+    const RewardsScreen(),
+    const StatisticsScreen(),
   ];
 
   final List<String> _titles = [
@@ -61,186 +64,97 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _addTask(Task task) async {
-    try {
-      await _databaseHelper.insertTask(task);
-      await _loadTasks();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Задача успешно добавлена'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        _showErrorSnackBar('Ошибка при добавлении задачи: $e');
-      }
-    }
-  }
-
-  Future<void> _deleteTask(String taskId) async {
-    try {
-      await _databaseHelper.deleteTask(taskId);
-      await _loadTasks();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Задача удалена'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        _showErrorSnackBar('Ошибка при удалении задачи: $e');
-      }
-    }
-  }
-
-  Future<void> _toggleTaskCompletion(Task task) async {
-    try {
-      task.isCompleted = !task.isCompleted;
-      await _databaseHelper.updateTask(task);
-      await _loadTasks();
-    } catch (e) {
-      if (mounted) {
-        _showErrorSnackBar('Ошибка при обновлении задачи: $e');
-      }
-    }
-  }
-
   void _showErrorSnackBar(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
-  Widget _buildTaskList() {
-    final filteredTasks = _tasks.where((task) {
-      return task.dueDate.year == _selectedDate.year &&
-          task.dueDate.month == _selectedDate.month &&
-          task.dueDate.day == _selectedDate.day;
-    }).toList();
+  Future<Experience?> _getCurrentExperience() async {
+    return await _databaseHelper.getExperience();
+  }
 
-    if (filteredTasks.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.task_alt,
-              size: 64,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Нет задач на ${_dateFormat.format(_selectedDate)}',
+  Widget _buildDrawer() {
+    return Drawer(
+      child: Column(
+        children: [
+          FutureBuilder<Experience?>(
+            future: _getCurrentExperience(),
+            builder: (context, snapshot) {
+              return UserAccountsDrawerHeader(
+                currentAccountPicture: CircleAvatar(
+                  backgroundColor: Colors.white,
+                  child: Text(
+                    snapshot.data?.level.toString() ?? '1',
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.deepPurple,
+                    ),
+                  ),
+                ),
+                accountName: const Text('Текущий уровень'),
+                accountEmail: Text(
+                  'Опыт: ${snapshot.data?.points ?? 0} XP',
+                  style: const TextStyle(fontSize: 14),
+                ),
+                decoration: const BoxDecoration(
+                  color: Colors.deepPurple,
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.settings),
+            title: const Text('Настройки'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.info),
+            title: const Text('О приложении'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const AboutScreen(),
+                ),
+              );
+            },
+          ),
+          const Spacer(),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              'Пользователь: elizaivolga',
               style: TextStyle(
-                fontSize: 16,
                 color: Colors.grey[600],
+                fontSize: 12,
               ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return ListView.builder(
-      itemCount: filteredTasks.length,
-      itemBuilder: (context, index) {
-        final task = filteredTasks[index];
-        return Dismissible(
-          key: Key(task.id),
-          background: Container(
-            color: Colors.red,
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 20),
-            child: const Icon(
-              Icons.delete,
-              color: Colors.white,
             ),
           ),
-          direction: DismissDirection.endToStart,
-          onDismissed: (direction) {
-            _deleteTask(task.id);
-          },
-          child: Card(
-            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: task.getDifficultyColor(),
-                child: Icon(
-                  task.isCompleted ? Icons.check : Icons.assignment,
-                  color: Colors.white,
-                ),
-              ),
-              title: Text(
-                task.title,
-                style: TextStyle(
-                  decoration: task.isCompleted ? TextDecoration.lineThrough : null,
-                ),
-              ),
-              subtitle: task.description?.isNotEmpty == true
-                  ? Text(
-                task.description!,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              )
-                  : null,
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    DateFormat('HH:mm').format(task.dueDate),
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 12,
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      task.isCompleted
-                          ? Icons.check_box
-                          : Icons.check_box_outline_blank,
-                      color: task.isCompleted ? Colors.green : Colors.grey,
-                    ),
-                    onPressed: () => _toggleTaskCompletion(task),
-                  ),
-                ],
-              ),
-              onTap: () async {
-                final result = await Navigator.push<bool>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => AddTaskScreen(task: task),
-                  ),
-                );
-                if (result == true) {
-                  await _loadTasks();
-                }
-              },
-            ),
-          ),
-        );
-      },
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: _buildDrawer(),
       appBar: AppBar(
         title: Text(_titles[_selectedIndex]),
         actions: [
@@ -278,7 +192,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           Expanded(
-            child: _selectedIndex == 0 ? _buildTaskList() : _screens[_selectedIndex],
+            child: _screens[_selectedIndex],
           ),
         ],
       ),
@@ -332,5 +246,11 @@ class _HomeScreenState extends State<HomeScreen> {
       )
           : null,
     );
+  }
+
+  @override
+  void dispose() {
+    _databaseHelper.close();
+    super.dispose();
   }
 }
