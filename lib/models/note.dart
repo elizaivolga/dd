@@ -1,30 +1,25 @@
+import 'package:uuid/uuid.dart';
+
 class Note {
-  final int? id;
-  String title;
-  String content;
-  String category;
-  String? imagePath;
-  DateTime createdAt;
+  final String id;
+  final String title;
+  final String? content;
+  final String category;
+  final String? imagePath;
+  final DateTime createdAt;
   DateTime? updatedAt;
 
   Note({
-    this.id,
+    String? id,
     required this.title,
-    required this.content,
+    this.content,
     required this.category,
     this.imagePath,
     DateTime? createdAt,
     this.updatedAt,
-  }) : createdAt = createdAt ?? DateTime.now();
-
-  static const List<String> defaultCategories = [
-    'Личное',
-    'Работа',
-    'Учеба',
-    'Покупки',
-    'Идеи',
-    'Другое',
-  ];
+  }) :
+        id = id ?? const Uuid().v4(),
+        createdAt = createdAt ?? DateTime.now();
 
   Map<String, dynamic> toMap() {
     return {
@@ -38,7 +33,7 @@ class Note {
     };
   }
 
-  static Note fromMap(Map<String, dynamic> map) {
+  factory Note.fromMap(Map<String, dynamic> map) {
     return Note(
       id: map['id'],
       title: map['title'],
@@ -52,9 +47,8 @@ class Note {
     );
   }
 
-  // Добавляем метод copyWith
   Note copyWith({
-    int? id,
+    String? id,
     String? title,
     String? content,
     String? category,

@@ -1,52 +1,78 @@
-class UserAchievement {
-  final int? id;
+import 'package:uuid/uuid.dart';
+
+class Achievement {
+  final String id;
   final String title;
   final String description;
-  final String iconPath;
-  final int xpRequired;
-  bool isUnlocked;
-  DateTime? unlockedAt;
+  final String type;
+  final int progress;
+  final int target;
+  final bool isUnlocked;
+  final DateTime? unlockedAt;
+  final String? icon;
 
-  UserAchievement({
-    this.id,
+  Achievement({
+    String? id,
     required this.title,
     required this.description,
-    required this.iconPath,
-    required this.xpRequired,
+    required this.type,
+    this.progress = 0,
+    required this.target,
     this.isUnlocked = false,
     this.unlockedAt,
-  });
+    this.icon,
+  }) : id = id ?? const Uuid().v4();
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'title': title,
       'description': description,
-      'iconPath': iconPath,
-      'xpRequired': xpRequired,
+      'type': type,
+      'progress': progress,
+      'target': target,
       'isUnlocked': isUnlocked ? 1 : 0,
       'unlockedAt': unlockedAt?.toIso8601String(),
+      'icon': icon,
     };
   }
 
-  static UserAchievement fromMap(Map<String, dynamic> map) {
-    return UserAchievement(
+  factory Achievement.fromMap(Map<String, dynamic> map) {
+    return Achievement(
       id: map['id'],
       title: map['title'],
       description: map['description'],
-      iconPath: map['iconPath'],
-      xpRequired: map['xpRequired'],
+      type: map['type'],
+      progress: map['progress'],
+      target: map['target'],
       isUnlocked: map['isUnlocked'] == 1,
       unlockedAt: map['unlockedAt'] != null
           ? DateTime.parse(map['unlockedAt'])
           : null,
+      icon: map['icon'],
     );
   }
 
-  void unlock() {
-    if (!isUnlocked) {
-      isUnlocked = true;
-      unlockedAt = DateTime.now();
-    }
+  Achievement copyWith({
+    String? title,
+    String? description,
+    String? type,
+    int? progress,
+    int? target,
+    bool? isUnlocked,
+    DateTime? unlockedAt,
+    String? icon,
+  }) {
+    return Achievement(
+      id: id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      type: type ?? this.type,
+      progress: progress ?? this.progress,
+      target: target ?? this.target,
+      isUnlocked: isUnlocked ?? this.isUnlocked,
+      unlockedAt: unlockedAt ?? this.unlockedAt,
+      icon: icon ?? this.icon,
+    );
   }
 }

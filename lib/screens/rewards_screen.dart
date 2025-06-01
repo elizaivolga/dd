@@ -1,107 +1,85 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import '../database/database_helper.dart';
 import '../models/experience.dart';
-import '../models/achievement.dart';
-import '../providers/experience_provider.dart';
-import '../widgets/achievement_card.dart';
-import '../widgets/experience_bar.dart';
 
 class RewardsScreen extends StatelessWidget {
-  const RewardsScreen({Key? key}) : super(key: key);
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Достижения'),
-        elevation: 0,
+        title: Text('Награды'),
       ),
-      body: Consumer<ExperienceProvider>(
-        builder: (context, expProvider, _) {
-          return FutureBuilder<UserExperience>(
-            future: expProvider.getCurrentExperience(),
-            builder: (context, expSnapshot) {
-              if (expSnapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
+      body: FutureBuilder<Experience?>(
+        future: DatabaseHelper().getExperience(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
 
-              if (expSnapshot.hasError) {
-                return Center(
-                  child: Text('Ошибка: ${expSnapshot.error}'),
-                );
-              }
+          final experience = snapshot.data ?? Experience(
+            currentXP: 0,
+            level: 1,
+            lastUpdated: DateTime.now(),
+          );
 
-              final experience = expSnapshot.data!;
-
-              return FutureBuilder<List<UserAchievement>>(
-                future: expProvider.getAchievements(),
-                builder: (context, achSnapshot) {
-                  if (achSnapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  if (achSnapshot.hasError) {
-                    return Center(
-                      child: Text('Ошибка: ${achSnapshot.error}'),
-                    );
-                  }
-
-                  final achievements = achSnapshot.data!;
-
-                  return CustomScrollView(
-                    slivers: [
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Уровень ${experience.level}',
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                              const SizedBox(height: 8),
-                              ExperienceBar(
-                                currentXP: experience.currentXP,
-                                maxXP: experience.calculateXPForNextLevel(),
-                              ),
-                              const SizedBox(height: 24),
-                              Text(
-                                'Достижения',
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                              const SizedBox(height: 8),
-                            ],
-                          ),
+          return ListView(
+            padding: EdgeInsets.all(16.0),
+            children: [
+              // Отображение текущего уровня и опыта
+              Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Уровень ${experience.level}',
+                        style: Theme.of(context).textTheme.headline5,
+                      ),
+                      SizedBox(height: 8.0),
+                      LinearProgressIndicator(
+                        value: experience.getLevelProgress(),
+                        backgroundColor: Colors.grey[200],
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Theme.of(context).primaryColor,
                         ),
                       ),
-                      SliverPadding(
-                        padding: const EdgeInsets.all(16.0),
-                        sliver: SliverGrid(
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            mainAxisSpacing: 16.0,
-                            crossAxisSpacing: 16.0,
-                            childAspectRatio: 0.85,
-                          ),
-                          delegate: SliverChildBuilderDelegate(
-                                (context, index) {
-                              final achievement = achievements[index];
-                              return AchievementCard(
-                                achievement: achievement,
-                                currentXP: experience.currentXP +
-                                    (experience.level - 1) * experience.calculateXPForNextLevel(),
-                              );
-                            },
-                            childCount: achievements.length,
-                          ),
-                        ),
+                      SizedBox(height: 8.0),
+                      Text(
+                        'XP: ${experience.currentXP}/${experience.calculateXPForNextLevel()}',
+                        style: Theme.of(context).textTheme.subtitle1,
                       ),
                     ],
-                  );
-                },
-              );
-            },
+                  ),
+                ),
+              ),
+              SizedBox(height: 16.0),
+              // Достижения
+              if (experience.currentXP >= 100)
+                Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.star,
+                          size: 48.0,
+                          color: Colors.amber,
+                        ),
+                        SizedBox(height: 8.0),
+                        Text(
+                          'Начало работы',
+                          style: Theme.of(context).textTheme.headline6,
+                        ),
+                        SizedBox(height: 8.0),
+                        Text(
+                          'Выполнено первых 100 XP!',
+                          style: Theme.of(context).textTheme.subtitle1,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
           );
         },
       ),

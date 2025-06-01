@@ -1,29 +1,29 @@
-class UserExperience {
-  final int? id;
-  int currentXP;
+class Experience {
+  final String? id;
+  int points;
   int level;
   DateTime lastUpdated;
 
-  UserExperience({
+  Experience({
     this.id,
-    required this.currentXP,
+    required this.points,
     required this.level,
     required this.lastUpdated,
   });
 
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
-      'currentXP': currentXP,
+      'id': id ?? DateTime.now().toIso8601String(), // Используем timestamp как id если не задан
+      'points': points,
       'level': level,
       'lastUpdated': lastUpdated.toIso8601String(),
     };
   }
 
-  static UserExperience fromMap(Map<String, dynamic> map) {
-    return UserExperience(
+  static Experience fromMap(Map<String, dynamic> map) {
+    return Experience(
       id: map['id'],
-      currentXP: map['currentXP'],
+      points: map['points'],
       level: map['level'],
       lastUpdated: DateTime.parse(map['lastUpdated']),
     );
@@ -31,9 +31,9 @@ class UserExperience {
 
   // Метод для добавления опыта и повышения уровня
   void addXP(int xp) {
-    currentXP += xp;
-    while (currentXP >= calculateXPForNextLevel()) {
-      currentXP -= calculateXPForNextLevel();
+    points += xp;
+    while (points >= calculateXPForNextLevel()) {
+      points -= calculateXPForNextLevel();
       level++;
     }
     lastUpdated = DateTime.now();
@@ -47,6 +47,21 @@ class UserExperience {
   // Процент прогресса до следующего уровня
   double getLevelProgress() {
     final xpForNext = calculateXPForNextLevel();
-    return currentXP / xpForNext;
+    return points / xpForNext;
+  }
+
+  // Метод для создания копии с обновленными значениями
+  Experience copyWith({
+    String? id,
+    int? points,
+    int? level,
+    DateTime? lastUpdated,
+  }) {
+    return Experience(
+      id: id ?? this.id,
+      points: points ?? this.points,
+      level: level ?? this.level,
+      lastUpdated: lastUpdated ?? this.lastUpdated,
+    );
   }
 }

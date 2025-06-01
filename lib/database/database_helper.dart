@@ -1,10 +1,11 @@
+import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/task.dart';
-import '../models/sub_task.dart';
+import '../models/event.dart';
+import '../models/experience.dart';
 import '../models/note.dart';
 import '../models/achievement.dart';
-import '../models/experience.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -21,10 +22,10 @@ class DatabaseHelper {
   }
 
   Future<Database> _initDatabase() async {
-    String path = join(await getDatabasesPath(), 'plana.db');
+    String path = join(await getDatabasesPath(), 'plana_db.db');
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -33,62 +34,35 @@ class DatabaseHelper {
   Future<void> _onCreate(Database db, int version) async {
     // Таблица задач
     await db.execute('''
-      CREATE TABLE tasks(
+      CREATE TABLE IF NOT EXISTS tasks(
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
         description TEXT,
         dueDate TEXT NOT NULL,
         isCompleted INTEGER NOT NULL DEFAULT 0,
         createdAt TEXT NOT NULL,
-        priority TEXT,
-        reminderTime TEXT,
+        difficulty INTEGER NOT NULL DEFAULT 0,
+        subTasks TEXT,
         experiencePoints INTEGER DEFAULT 0
       )
     ''');
 
-    // Таблица подзадач
+    // Таблица событий календаря
     await db.execute('''
-      CREATE TABLE sub_tasks(
-        id TEXT PRIMARY KEY,
-        taskId TEXT NOT NULL,
-        title TEXT NOT NULL,
-        isCompleted INTEGER NOT NULL DEFAULT 0,
-        createdAt TEXT NOT NULL,
-        completedAt TEXT,
-        FOREIGN KEY (taskId) REFERENCES tasks (id) ON DELETE CASCADE
-      )
-    ''');
-
-    // Таблица заметок
-    await db.execute('''
-      CREATE TABLE notes(
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        content TEXT,
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT NOT NULL,
-        color TEXT
-      )
-    ''');
-
-    // Таблица достижений
-    await db.execute('''
-      CREATE TABLE achievements(
+      CREATE TABLE IF NOT EXISTS events(
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
         description TEXT,
-        type TEXT NOT NULL,
-        progress INTEGER NOT NULL DEFAULT 0,
-        target INTEGER NOT NULL,
-        isUnlocked INTEGER NOT NULL DEFAULT 0,
-        unlockedAt TEXT,
-        icon TEXT
+        startTime TEXT NOT NULL,
+        endTime TEXT NOT NULL,
+        location TEXT,
+        color TEXT
       )
     ''');
 
     // Таблица опыта
     await db.execute('''
-      CREATE TABLE experience(
+      CREATE TABLE IF NOT EXISTS experience(
         id TEXT PRIMARY KEY,
         points INTEGER NOT NULL DEFAULT 0,
         level INTEGER NOT NULL DEFAULT 1,
@@ -96,179 +70,310 @@ class DatabaseHelper {
       )
     ''');
 
+    // Таблица статистики
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS statistics(
+        date TEXT PRIMARY KEY,
+        tasksCompleted INTEGER NOT NULL DEFAULT 0,
+        totalTasks INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+
+    // Таблица заметок
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS notes(
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        content TEXT,
+        category TEXT NOT NULL,
+        imagePath TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT
+      )
+    ''');
+
+    // Таблица достижений
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS achievements(
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        iconPath TEXT NOT NULL,
+        xpRequired INTEGER NOT NULL,
+        isUnlocked INTEGER NOT NULL DEFAULT 0,
+        unlockedAt TEXT
+      )
+    ''');
+
     // Создание индексов
-    await db.execute('CREATE INDEX idx_tasks_dueDate ON tasks(dueDate)');
-    await db.execute('CREATE INDEX idx_tasks_isCompleted ON tasks(isCompleted)');
-    await db.execute('CREATE INDEX idx_subtasks_taskId ON sub_tasks(taskId)');
-    await db.execute('CREATE INDEX idx_notes_createdAt ON notes(createdAt)');
-    await db.execute('CREATE INDEX idx_achievements_type ON achievements(type)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_tasks_dueDate ON tasks(dueDate)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(isCompleted)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_events_startTime ON events(startTime)');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Здесь будет код миграции при обновлении схемы БД
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE tasks ADD COLUMN difficulty INTEGER NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE tasks ADD COLUMN subTasks TEXT');
+      await db.execute('ALTER TABLE tasks ADD COLUMN experiencePoints INTEGER DEFAULT 0');
+    }
   }
 
-  // Общие CRUD операции
-  Future<void> insert(String table, Map<String, dynamic> data) async {
+  // CRUD операции для задач
+  Future<int> insertTask(Task task) async {
     final db = await database;
-    await db.insert(table, data, conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  Future<List<Map<String, dynamic>>> query(
-      String table, {
-        String? where,
-        List<dynamic>? whereArgs,
-        String? orderBy,
-      }) async {
-    final db = await database;
-    return await db.query(
-      table,
-      where: where,
-      whereArgs: whereArgs,
-      orderBy: orderBy,
-    );
-  }
-
-  Future<void> update(
-      String table,
-      Map<String, dynamic> data, {
-        String? where,
-        List<dynamic>? whereArgs,
-      }) async {
-    final db = await database;
-    await db.update(
-      table,
-      data,
-      where: where,
-      whereArgs: whereArgs,
-    );
-  }
-
-  Future<void> delete(
-      String table, {
-        String? where,
-        List<dynamic>? whereArgs,
-      }) async {
-    final db = await database;
-    await db.delete(
-      table,
-      where: where,
-      whereArgs: whereArgs,
-    );
-  }
-
-  // Операции с задачами
-  Future<void> insertTask(Task task) async {
-    await insert('tasks', task.toMap());
+    final taskMap = task.toMap();
+    if (taskMap['subTasks'] != null) {
+      taskMap['subTasks'] = jsonEncode(task.subTasks);
+    }
+    return await db.insert('tasks', taskMap, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<Task>> getTasks() async {
-    final maps = await query('tasks', orderBy: 'dueDate ASC');
-    return List.generate(maps.length, (i) => Task.fromMap(maps[i]));
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('tasks', orderBy: 'dueDate ASC');
+
+    return maps.map((map) {
+      List<String> subTasks = [];
+      if (map['subTasks'] != null) {
+        subTasks = List<String>.from(jsonDecode(map['subTasks']));
+      }
+
+      return Task(
+        id: map['id'],
+        title: map['title'],
+        description: map['description'],
+        dueDate: DateTime.parse(map['dueDate']),
+        isCompleted: map['isCompleted'] == 1,
+        createdAt: DateTime.parse(map['createdAt']),
+        difficulty: TaskDifficulty.values[map['difficulty']],
+        subTasks: subTasks,
+      );
+    }).toList();
   }
 
   Future<List<Task>> getTasksByDate(DateTime date) async {
+    final db = await database;
     final startOfDay = DateTime(date.year, date.month, date.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
 
-    final maps = await query(
+    final List<Map<String, dynamic>> maps = await db.query(
       'tasks',
-      where: 'dueDate >= ? AND dueDate < ?',
+      where: 'dueDate BETWEEN ? AND ?',
       whereArgs: [startOfDay.toIso8601String(), endOfDay.toIso8601String()],
       orderBy: 'dueDate ASC',
     );
-    return List.generate(maps.length, (i) => Task.fromMap(maps[i]));
+
+    return maps.map((map) {
+      List<String> subTasks = [];
+      if (map['subTasks'] != null) {
+        subTasks = List<String>.from(jsonDecode(map['subTasks']));
+      }
+      return Task(
+        id: map['id'],
+        title: map['title'],
+        description: map['description'],
+        dueDate: DateTime.parse(map['dueDate']),
+        isCompleted: map['isCompleted'] == 1,
+        createdAt: DateTime.parse(map['createdAt']),
+        difficulty: TaskDifficulty.values[map['difficulty']],
+        subTasks: subTasks,
+      );
+    }).toList();
   }
 
-  // Операции с подзадачами
-  Future<void> insertSubTask(SubTask subTask) async {
-    await insert('sub_tasks', subTask.toMap());
-  }
-
-  Future<List<SubTask>> getSubTasks(String taskId) async {
-    final maps = await query(
-      'sub_tasks',
-      where: 'taskId = ?',
-      whereArgs: [taskId],
-      orderBy: 'createdAt ASC',
+  Future<int> updateTask(Task task) async {
+    final db = await database;
+    final taskMap = task.toMap();
+    if (taskMap['subTasks'] != null) {
+      taskMap['subTasks'] = jsonEncode(task.subTasks);
+    }
+    return await db.update(
+      'tasks',
+      taskMap,
+      where: 'id = ?',
+      whereArgs: [task.id],
     );
-    return List.generate(maps.length, (i) => SubTask.fromMap(maps[i]));
   }
 
-  // Операции с заметками
-  Future<void> insertNote(Note note) async {
-    await insert('notes', note.toMap());
+  Future<int> deleteTask(String taskId) async {
+    final db = await database;
+    return await db.delete(
+      'tasks',
+      where: 'id = ?',
+      whereArgs: [taskId],
+    );
   }
 
-  Future<List<Note>> getNotes() async {
-    final maps = await query('notes', orderBy: 'createdAt DESC');
-    return List.generate(maps.length, (i) => Note.fromMap(maps[i]));
+  // CRUD операции для событий календаря
+  Future<int> insertEvent(Event event) async {
+    final db = await database;
+    return await db.insert('events', event.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  // Операции с достижениями
-  Future<void> insertAchievement(Achievement achievement) async {
-    await insert('achievements', achievement.toMap());
-  }
+  Future<List<Event>> getEvents(DateTime start, DateTime end) async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'events',
+      where: 'startTime BETWEEN ? AND ?',
+      whereArgs: [start.toIso8601String(), end.toIso8601String()],
+      orderBy: 'startTime ASC',
+    );
 
-  Future<List<Achievement>> getAchievements() async {
-    final maps = await query('achievements');
-    return List.generate(maps.length, (i) => Achievement.fromMap(maps[i]));
+    return maps.map((map) => Event.fromMap(map)).toList();
   }
 
   // Операции с опытом
-  Future<void> updateExperience(Experience experience) async {
-    await update(
-      'experience',
-      experience.toMap(),
-      where: 'id = ?',
-      whereArgs: [experience.id],
-    );
-  }
-
   Future<Experience?> getExperience() async {
-    final maps = await query('experience');
-    if (maps.isEmpty) return null;
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('experience');
+
+    if (maps.isEmpty) {
+      final initialExperience = Experience(
+        points: 0,
+        level: 1,
+        lastUpdated: DateTime.now(),
+      );
+      await updateExperience(initialExperience);
+      return initialExperience;
+    }
+
     return Experience.fromMap(maps.first);
   }
 
-  // Транзакционные операции
-  Future<void> completeTaskWithRewards(String taskId) async {
+  Future<void> updateExperience(Experience experience) async {
+    final db = await database;
+    await db.insert(
+      'experience',
+      experience.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  // Операции со статистикой
+  Future<Map<String, int>> getStatistics(DateTime date) async {
+    final db = await database;
+    final dateStr = date.toIso8601String().split('T')[0];
+
+    final List<Map<String, dynamic>> result = await db.query(
+      'statistics',
+      where: 'date = ?',
+      whereArgs: [dateStr],
+    );
+
+    if (result.isEmpty) {
+      return {
+        'tasksCompleted': 0,
+        'totalTasks': 0,
+      };
+    }
+
+    return {
+      'tasksCompleted': result.first['tasksCompleted'] as int,
+      'totalTasks': result.first['totalTasks'] as int,
+    };
+  }
+
+  Future<void> updateStatistics(DateTime date, int completed, int total) async {
+    final db = await database;
+    final dateStr = date.toIso8601String().split('T')[0];
+
+    await db.insert(
+      'statistics',
+      {
+        'date': dateStr,
+        'tasksCompleted': completed,
+        'totalTasks': total,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  // Операции с заметками
+  Future<int> insertNote(Note note) async {
+    final db = await database;
+    return await db.insert('notes', note.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<Note>> getNotes() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'notes',
+      orderBy: 'createdAt DESC',
+    );
+
+    return maps.map((map) => Note.fromMap(map)).toList();
+  }
+
+  // Операции с достижениями
+  Future<void> unlockAchievement(String achievementId) async {
+    final db = await database;
+    await db.update(
+      'achievements',
+      {
+        'isUnlocked': 1,
+        'unlockedAt': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [achievementId],
+    );
+  }
+
+  Future<List<Achievement>> getAchievements() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('achievements');
+    return maps.map((map) => Achievement.fromMap(map)).toList();
+  }
+
+  // Комплексные операции
+  Future<void> completeTask(String taskId) async {
     final db = await database;
     await db.transaction((txn) async {
       // Обновляем статус задачи
       await txn.update(
         'tasks',
-        {'isCompleted': 1},
+        {
+          'isCompleted': 1,
+          'experiencePoints': 100,
+        },
         where: 'id = ?',
         whereArgs: [taskId],
       );
 
-      // Получаем опыт пользователя
-      final expMaps = await txn.query('experience');
-      if (expMaps.isNotEmpty) {
-        final exp = Experience.fromMap(expMaps.first);
-        final updatedExp = exp.copyWith(
-          points: exp.points + 10,
-          lastUpdated: DateTime.now(),
-        );
-        await txn.update(
-          'experience',
-          updatedExp.toMap(),
-          where: 'id = ?',
-          whereArgs: [exp.id],
-        );
+      // Получаем и обновляем опыт
+      final exp = await getExperience() ??
+          Experience(points: 0, level: 1, lastUpdated: DateTime.now());
+      exp.addXP(100);
+      await updateExperience(exp);
+
+      // Обновляем статистику
+      final today = DateTime.now();
+      final stats = await getStatistics(today);
+      await updateStatistics(
+        today,
+        stats['tasksCompleted']! + 1,
+        stats['totalTasks']!,
+      );
+
+      // Проверяем достижения
+      if (exp.points >= 100) {
+        await unlockAchievement('first_hundred_xp');
       }
     });
   }
 
-  // Методы очистки и обслуживания
-  Future<void> deleteCompletedTasks() async {
-    await delete('tasks', where: 'isCompleted = ?', whereArgs: [1]);
-  }
-
-  Future<void> vacuum() async {
+  // Служебные методы
+  Future<void> deleteDatabase() async {
     final db = await database;
-    await db.execute('VACUUM');
+    await db.transaction((txn) async {
+      await txn.execute('DROP TABLE IF EXISTS tasks');
+      await txn.execute('DROP TABLE IF EXISTS events');
+      await txn.execute('DROP TABLE IF EXISTS experience');
+      await txn.execute('DROP TABLE IF EXISTS statistics');
+      await txn.execute('DROP TABLE IF EXISTS notes');
+      await txn.execute('DROP TABLE IF EXISTS achievements');
+    });
+    await _onCreate(db, 2);
   }
 
   Future<void> close() async {

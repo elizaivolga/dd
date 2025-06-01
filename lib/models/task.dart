@@ -1,3 +1,12 @@
+import 'package:uuid/uuid.dart';
+import 'package:flutter/material.dart';
+
+enum TaskDifficulty {
+  easy,
+  medium,
+  hard
+}
+
 class Task {
   final String id;
   final String title;
@@ -5,17 +14,34 @@ class Task {
   final DateTime dueDate;
   bool isCompleted;
   final DateTime createdAt;
-  final String? priority;
+  final TaskDifficulty difficulty;
+  final List<String> subTasks;
 
   Task({
-    required this.id,
+    String? id,
     required this.title,
     this.description,
     required this.dueDate,
     this.isCompleted = false,
-    required this.createdAt,
-    this.priority,
-  });
+    DateTime? createdAt,
+    required this.difficulty,
+    List<String>? subTasks,
+  }) :
+        id = id ?? const Uuid().v4(),
+        createdAt = createdAt ?? DateTime.now(),
+        subTasks = subTasks ?? [];
+
+  // Get color based on difficulty
+  Color getDifficultyColor() {
+    switch (difficulty) {
+      case TaskDifficulty.easy:
+        return Colors.green;
+      case TaskDifficulty.medium:
+        return Colors.orange;
+      case TaskDifficulty.hard:
+        return Colors.red;
+    }
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -25,7 +51,8 @@ class Task {
       'dueDate': dueDate.toIso8601String(),
       'isCompleted': isCompleted ? 1 : 0,
       'createdAt': createdAt.toIso8601String(),
-      'priority': priority,
+      'difficulty': difficulty.index,
+      'subTasks': subTasks,
     };
   }
 
@@ -37,7 +64,8 @@ class Task {
       dueDate: DateTime.parse(map['dueDate']),
       isCompleted: map['isCompleted'] == 1,
       createdAt: DateTime.parse(map['createdAt']),
-      priority: map['priority'],
+      difficulty: TaskDifficulty.values[map['difficulty']],
+      subTasks: List<String>.from(map['subTasks']),
     );
   }
 }
