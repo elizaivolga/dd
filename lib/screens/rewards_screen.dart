@@ -61,7 +61,7 @@ class RewardsScreen extends StatelessWidget {
                       children: [
                         Image.asset(
                           'assets/images/1lvl.png',
-                          height: 48.0, // Set the same size as the previous icon
+                          height: 48.0,
                           width: 48.0,
                         ),
                         const SizedBox(height: 8.0),
@@ -72,6 +72,31 @@ class RewardsScreen extends StatelessWidget {
                         const SizedBox(height: 8.0),
                         Text(
                           'Взят первый уровень!',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (experience.points >= 10)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      children: [
+                        Image.asset(
+                          'assets/images/1lvl.png',
+                          height: 48.0, // Set the same size as the previous icon
+                          width: 48.0,
+                        ),
+                        const SizedBox(height: 8.0),
+                        Text(
+                          'Знакомство',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 8.0),
+                        Text(
+                          'Выполнена первая задача',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                       ],

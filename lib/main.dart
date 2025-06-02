@@ -4,8 +4,9 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 import 'screens/home_screen.dart';
+import 'screens/welcome_screen.dart';
 import 'database/database_helper.dart';
-import 'providers/theme_provider.dart';
+import 'providers/app_state.dart';
 
 void main() {
   runZonedGuarded(() async {
@@ -17,7 +18,7 @@ void main() {
 
       runApp(
         ChangeNotifierProvider(
-          create: (_) => ThemeProvider(),
+          create: (_) => AppState(),
           child: const MyApp(),
         ),
       );
@@ -47,8 +48,8 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ThemeProvider>(
-      builder: (context, themeProvider, child) {
+    return Consumer<AppState>(
+      builder: (context, appState, child) {
         return MaterialApp(
           title: 'Plana',
           debugShowCheckedModeBanner: false,
@@ -64,11 +65,13 @@ class MyApp extends StatelessWidget {
           locale: const Locale('ru', 'RU'),
           theme: _buildLightTheme(context),
           darkTheme: _buildDarkTheme(context),
-          themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+          themeMode: appState.themeMode,
           home: Builder(
             builder: (context) {
               try {
-                return const HomeScreen();
+                return appState.showWelcomeScreen
+                    ? WelcomeScreen()
+                    : const HomeScreen();
               } catch (e) {
                 debugPrint('Error building HomeScreen: $e');
                 return Scaffold(

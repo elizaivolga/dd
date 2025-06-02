@@ -2,6 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AppState extends ChangeNotifier {
+  // Константы приложения
+  static const String currentUser = 'elizaivolga';
+  static final DateTime currentDate = DateTime.parse('2025-06-02 00:33:56');
+
+  // Ключи для SharedPreferences
+  static const String _themeModeKey = 'theme_mode';
+  static const String _showWelcomeScreenKey = 'show_welcome_screen';
+  static const String _currentFilterKey = 'current_filter';
+  static const String _sortOrderKey = 'sort_order';
+
   // Состояния приложения
   ThemeMode _themeMode = ThemeMode.system;
   bool _showWelcomeScreen = true;
@@ -28,17 +38,17 @@ class AppState extends ChangeNotifier {
 
       // Загружаем тему
       _themeMode = ThemeMode.values[
-      prefs.getInt('theme_mode') ?? ThemeMode.system.index
+      prefs.getInt(_themeModeKey) ?? ThemeMode.system.index
       ];
 
       // Загружаем статус экрана приветствия
-      _showWelcomeScreen = prefs.getBool('show_welcome_screen') ?? true;
+      _showWelcomeScreen = prefs.getBool(_showWelcomeScreenKey) ?? true;
 
       // Загружаем текущий фильтр
-      _currentFilter = prefs.getString('current_filter') ?? 'all';
+      _currentFilter = prefs.getString(_currentFilterKey) ?? 'all';
 
       // Загружаем порядок сортировки
-      _sortOrder = prefs.getString('sort_order') ?? 'dueDate';
+      _sortOrder = prefs.getString(_sortOrderKey) ?? 'dueDate';
 
       notifyListeners();
     } catch (e) {
@@ -51,7 +61,7 @@ class AppState extends ChangeNotifier {
     if (_themeMode != mode) {
       _themeMode = mode;
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('theme_mode', mode.index);
+      await prefs.setInt(_themeModeKey, mode.index);
       notifyListeners();
     }
   }
@@ -61,7 +71,7 @@ class AppState extends ChangeNotifier {
     if (_showWelcomeScreen != show) {
       _showWelcomeScreen = show;
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('show_welcome_screen', show);
+      await prefs.setBool(_showWelcomeScreenKey, show);
       notifyListeners();
     }
   }
@@ -79,7 +89,7 @@ class AppState extends ChangeNotifier {
     if (_currentFilter != filter) {
       _currentFilter = filter;
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('current_filter', filter);
+      await prefs.setString(_currentFilterKey, filter);
       notifyListeners();
     }
   }
@@ -89,7 +99,7 @@ class AppState extends ChangeNotifier {
     if (_sortOrder != order) {
       _sortOrder = order;
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('sort_order', order);
+      await prefs.setString(_sortOrderKey, order);
       notifyListeners();
     }
   }

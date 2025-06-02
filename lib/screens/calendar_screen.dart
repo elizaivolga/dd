@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import '../models/event.dart';
 import '../database/database_helper.dart';
-import 'package:intl/intl.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({Key? key}) : super(key: key);
@@ -14,25 +15,46 @@ class CalendarScreen extends StatefulWidget {
 class _CalendarScreenState extends State<CalendarScreen> {
   final DatabaseHelper _db = DatabaseHelper();
   late DateTime _focusedDay;
-  DateTime? _selectedDay;
+  late DateTime _selectedDay;
   Map<DateTime, List<Event>> _events = {};
   List<Event> _selectedEvents = [];
   bool _isLoading = false;
-  final _dateFormat = DateFormat('dd.MM.yyyy');
-  final _timeFormat = DateFormat('HH:mm');
+  final _dateFormat = DateFormat('dd.MM.yyyy', 'ru_RU');
+  final _timeFormat = DateFormat('HH:mm', 'ru_RU');
+
+  // Константы для текущей даты и пользователя
+  static const String currentUser = 'elizaivolga';
+  static final DateTime currentDate = DateTime.parse('2025-06-02 00:08:52');
 
   @override
   void initState() {
     super.initState();
-    _focusedDay = DateTime.now();
-    _selectedDay = _focusedDay;
-    _loadEvents();
+    _focusedDay = currentDate;
+    _selectedDay = currentDate;
+    _initializeCalendar();
+  }
+
+  Future<void> _initializeCalendar() async {
+    if (!mounted) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      await initializeDateFormatting('ru_RU');
+      await _loadEvents();
+    } catch (e) {
+      if (mounted) {
+        _showErrorSnackBar('Ошибка при инициализации календаря: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   Future<void> _loadEvents() async {
     if (!mounted) return;
-
-    setState(() => _isLoading = true);
 
     try {
       final events = await _db.getEvents(
@@ -56,48 +78,45 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
       setState(() {
         _events = eventsByDate;
-        if (_selectedDay != null) {
-          _selectedEvents = _getEventsForDay(_selectedDay!);
-        }
+        _selectedEvents = _getEventsForDay(_selectedDay);
       });
     } catch (e) {
       if (mounted) {
         _showErrorSnackBar('Ошибка при загрузке событий: $e');
       }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
     }
   }
 
   void _showErrorSnackBar(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
   List<Event> _getEventsForDay(DateTime day) {
     final date = DateTime(day.year, day.month, day.day);
-    return _events[date] ?? [];
+    final events = _events[date] ?? [];
+    events.sort((a, b) => a.startTime.compareTo(b.startTime));
+    return events;
   }
 
-  Future<void> _showAddEventDialog() async {
-    final titleController = TextEditingController();
-    final descriptionController = TextEditingController();
-    final locationController = TextEditingController();
-    DateTime startTime = _selectedDay ?? DateTime.now();
-    DateTime endTime = startTime.add(const Duration(hours: 1));
-    Color selectedColor = Colors.blue;
+  Future<void> _showEventDialog([Event? event]) async {
+    final titleController = TextEditingController(text: event?.title ?? '');
+    final descriptionController = TextEditingController(text: event?.description ?? '');
+    final locationController = TextEditingController(text: event?.location ?? '');
+    DateTime startTime = event?.startTime ?? _selectedDay;
+    Color selectedColor = event?.color ?? Colors.blue;
 
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          title: const Text('Новое событие'),
+          title: Text(event == null ? 'Новое событие' : 'Редактировать событие'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -108,6 +127,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     labelText: 'Название',
                     border: OutlineInputBorder(),
                   ),
+                  textCapitalization: TextCapitalization.sentences,
+                  autofocus: true,
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -116,7 +137,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Описание',
                     border: OutlineInputBorder(),
+                    hintText: 'Добавьте описание события...',
                   ),
+                  textCapitalization: TextCapitalization.sentences,
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -124,99 +147,96 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Место',
                     border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.location_on_outlined),
+                    hintText: 'Укажите место проведения...',
                   ),
+                  textCapitalization: TextCapitalization.sentences,
                 ),
                 const SizedBox(height: 16),
-                ListTile(
-                  title: const Text('Начало'),
-                  subtitle: Text(
-                    '${_dateFormat.format(startTime)} ${_timeFormat.format(startTime)}',
-                  ),
-                  trailing: const Icon(Icons.access_time),
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: startTime,
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime(2030),
-                    );
-                    if (date != null) {
-                      final time = await showTimePicker(
-                        context: context,
-                        initialTime: TimeOfDay.fromDateTime(startTime),
-                      );
-                      if (time != null) {
-                        setState(() {
-                          startTime = DateTime(
-                            date.year,
-                            date.month,
-                            date.day,
-                            time.hour,
-                            time.minute,
-                          );
-                          // Обновляем время окончания, сохраняя длительность
-                          final duration = endTime.difference(startTime);
-                          endTime = startTime.add(duration);
-                        });
-                      }
-                    }
-                  },
-                ),
-                ListTile(
-                  title: const Text('Окончание'),
-                  subtitle: Text(
-                    '${_dateFormat.format(endTime)} ${_timeFormat.format(endTime)}',
-                  ),
-                  trailing: const Icon(Icons.access_time),
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: endTime,
-                      firstDate: startTime,
-                      lastDate: DateTime(2030),
-                    );
-                    if (date != null) {
-                      final time = await showTimePicker(
-                        context: context,
-                        initialTime: TimeOfDay.fromDateTime(endTime),
-                      );
-                      if (time != null) {
-                        setState(() {
-                          endTime = DateTime(
-                            date.year,
-                            date.month,
-                            date.day,
-                            time.hour,
-                            time.minute,
-                          );
-                        });
-                      }
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    Colors.blue,
-                    Colors.red,
-                    Colors.green,
-                    Colors.orange,
-                    Colors.purple,
-                  ].map((color) => GestureDetector(
-                    onTap: () => setState(() => selectedColor = color),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                        border: color == selectedColor
-                            ? Border.all(color: Colors.black, width: 2)
-                            : null,
-                      ),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.access_time),
+                    title: const Text('Время'),
+                    subtitle: Text(
+                      '${_dateFormat.format(startTime)} ${_timeFormat.format(startTime)}',
                     ),
-                  )).toList(),
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: startTime,
+                        firstDate: DateTime(2024),
+                        lastDate: DateTime(2026),
+                        locale: const Locale('ru', 'RU'),
+                      );
+                      if (date != null && mounted) {
+                        final time = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.fromDateTime(startTime),
+                        );
+                        if (time != null) {
+                          setState(() {
+                            startTime = DateTime(
+                              date.year,
+                              date.month,
+                              date.day,
+                              time.hour,
+                              time.minute,
+                            );
+                          });
+                        }
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Цвет события',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            Colors.blue,
+                            Colors.red,
+                            Colors.green,
+                            Colors.orange,
+                            Colors.purple,
+                            Colors.teal,
+                            Colors.pink,
+                            Colors.indigo,
+                            Colors.amber,
+                            Colors.cyan,
+                            Colors.deepOrange,
+                            Colors.deepPurple,
+                          ].map((color) => GestureDetector(
+                            onTap: () => setState(() => selectedColor = color),
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: color,
+                                shape: BoxShape.circle,
+                                border: color == selectedColor
+                                    ? Border.all(color: Colors.black, width: 2)
+                                    : null,
+                              ),
+                            ),
+                          )).toList(),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -233,15 +253,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     const SnackBar(
                       content: Text('Введите название события'),
                       backgroundColor: Colors.red,
-                    ),
-                  );
-                  return;
-                }
-                if (endTime.isBefore(startTime)) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Время окончания должно быть позже начала'),
-                      backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
                     ),
                   );
                   return;
@@ -256,21 +268,88 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
 
     if (result == true) {
-      final event = Event(
+      final newEvent = Event(
+        id: event?.id, // null для нового события, существующий id для редактирования
         title: titleController.text,
         description: descriptionController.text.isEmpty
             ? null
             : descriptionController.text,
         startTime: startTime,
-        endTime: endTime,
+        endTime: startTime.add(const Duration(hours: 1)),
         location: locationController.text.isEmpty
             ? null
             : locationController.text,
         color: selectedColor,
       );
 
-      await _db.insertEvent(event);
-      _loadEvents();
+      try {
+        if (event == null) {
+          await _db.insertEvent(newEvent);
+        } else {
+          await _db.updateEvent(newEvent);
+        }
+        await _loadEvents();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(event == null ? 'Событие создано' : 'Событие обновлено'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          _showErrorSnackBar(
+              event == null
+                  ? 'Ошибка при сохранении события: $e'
+                  : 'Ошибка при обновлении события: $e'
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _deleteEvent(Event event) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить событие?'),
+        content: Text('Вы уверены, что хотите удалить "${event.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await _db.deleteEvent(event.id);
+        await _loadEvents();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Событие удалено'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          _showErrorSnackBar('Ошибка при удалении события: $e');
+        }
+      }
     }
   }
 
@@ -282,18 +361,21 @@ class _CalendarScreenState extends State<CalendarScreen> {
           : Column(
         children: [
           TableCalendar<Event>(
+            locale: 'ru_RU',
             firstDay: DateTime.utc(2024, 1, 1),
             lastDay: DateTime.utc(2026, 12, 31),
             focusedDay: _focusedDay,
             selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
             eventLoader: _getEventsForDay,
             startingDayOfWeek: StartingDayOfWeek.monday,
+            calendarFormat: CalendarFormat.month,
+            availableCalendarFormats: const {
+              CalendarFormat.month: 'Месяц',
+            },
             calendarStyle: CalendarStyle(
               markersMaxCount: 4,
-              markerDecoration: BoxDecoration(
-                color: Theme.of(context).primaryColor,
-                shape: BoxShape.circle,
-              ),
+              markerSize: 8,
+              markersAlignment: Alignment.bottomCenter,
               selectedDecoration: BoxDecoration(
                 color: Theme.of(context).primaryColor,
                 shape: BoxShape.circle,
@@ -302,10 +384,37 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 color: Theme.of(context).primaryColor.withOpacity(0.5),
                 shape: BoxShape.circle,
               ),
+              weekendTextStyle: const TextStyle(color: Colors.red),
             ),
             headerStyle: const HeaderStyle(
               formatButtonVisible: false,
               titleCentered: true,
+            ),
+            daysOfWeekStyle: const DaysOfWeekStyle(
+              weekendStyle: TextStyle(color: Colors.red),
+            ),
+            calendarBuilders: CalendarBuilders(
+              markerBuilder: (context, date, events) {
+                if (events.isEmpty) return null;
+
+                return Positioned(
+                  bottom: 1,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: events.take(4).map((event) {
+                      return Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 1),
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: (event as Event).color ?? Theme.of(context).primaryColor,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                );
+              },
             ),
             onDaySelected: (selectedDay, focusedDay) {
               setState(() {
@@ -315,7 +424,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
               });
             },
             onPageChanged: (focusedDay) {
-              _focusedDay = focusedDay;
+              setState(() {
+                _focusedDay = focusedDay;
+              });
               _loadEvents();
             },
           ),
@@ -333,7 +444,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Нет событий на ${_dateFormat.format(_selectedDay!)}',
+                    'Нет событий на ${_dateFormat.format(_selectedDay)}',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: Colors.grey[600],
                     ),
@@ -363,7 +474,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         Text(
-                          '${_timeFormat.format(event.startTime)} - ${_timeFormat.format(event.endTime)}',
+                          _timeFormat.format(event.startTime),
                           style: TextStyle(color: Colors.grey[600]),
                         ),
                         if (event.location != null)
@@ -375,31 +486,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     ),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_outline),
-                      onPressed: () async {
-                        final confirmed = await showDialog<bool>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Удалить событие?'),
-                            content: Text('Вы уверены, что хотите удалить "${event.title}"?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: const Text('Отмена'),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                child: const Text('Удалить'),
-                              ),
-                            ],
-                          ),
-                        );
-
-                        if (confirmed == true) {
-                          await _db.deleteEvent(event.id);
-                          _loadEvents();
-                        }
-                      },
+                      onPressed: () => _deleteEvent(event),
                     ),
+                    onTap: () => _showEventDialog(event),
                   ),
                 );
               },
@@ -408,7 +497,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddEventDialog,
+        onPressed: () => _showEventDialog(),
         child: const Icon(Icons.add),
       ),
     );

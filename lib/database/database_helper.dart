@@ -402,7 +402,15 @@ class DatabaseHelper {
       throw DatabaseException('Ошибка при удалении события: $e');
     }
   }
-
+  Future<void> updateEvent(Event event) async {
+    final db = await database;
+    await db.update(
+      'events',
+      event.toMap(),
+      where: 'id = ?',
+      whereArgs: [event.id],
+    );
+  }
   // Операции с заметками
   Future<int> insertNote(Note note) async {
     try {
