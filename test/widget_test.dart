@@ -7,23 +7,143 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/mockito.dart';
+import 'package:mockito/annotations.dart';
+import 'package:plana/screens/tasks_screen.dart';
+import 'package:plana/models/task.dart';
+import 'package:plana/database/database_helper.dart';
+import 'package:intl/intl.dart';
 
-import 'package:plana/main.dart';
+import 'widget_test.mocks.dart';
 
+// Генерируем мок классы
+@GenerateMocks([DatabaseHelper])
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.;
+  late MockDatabaseHelper mockDb;
+  late List<Task> mockTasks;
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  setUp(() {
+    mockDb = MockDatabaseHelper();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    // Создаем тестовые данные
+    mockTasks = [
+      Task(
+        id: '1',
+        title: 'Тестовая задача 1',
+        description: 'Описание задачи 1',
+        dueDate: DateTime.now().add(const Duration(days: 1)),
+        subTasks: [
+          SubTask(text: 'Подзадача 1', isCompleted: false),
+          SubTask(text: 'Подзадача 2', isCompleted: true),
+        ],
+      ),
+      Task(
+        id: '2',
+        title: 'Тестовая задача 2',
+        dueDate: DateTime.now().subtract(const Duration(days: 1)),
+        isCompleted: true,
+        subTasks: [],
+      ),
+    ];
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  Widget createWidgetUnderTest() {
+    return MaterialApp(
+      home: TasksScreen(
+        databaseHelper: mockDb,
+      ),
+    );
+  }
+
+  group('TasksScreen Widget Tests', () {
+
+    testWidgets('shows empty state when no tasks',
+            (WidgetTester tester) async {
+          // Arrange
+          when(mockDb.getTasks()).thenAnswer((_) => Future.value([]));
+
+          // Act
+          await tester.pumpWidget(createWidgetUnderTest());
+          await tester.pumpAndSettle();
+
+          // Assert
+          expect(find.text('Нет активных задач'), findsOneWidget);
+          expect(find.byIcon(Icons.task_outlined), findsOneWidget);
+        });
+
+    testWidgets('shows list of tasks when tasks exist',
+            (WidgetTester tester) async {
+          // Arrange
+          when(mockDb.getTasks()).thenAnswer((_) => Future.value(mockTasks));
+
+          // Act
+          await tester.pumpWidget(createWidgetUnderTest());
+          await tester.pumpAndSettle();
+
+          // Assert
+          expect(find.text('Тестовая задача 1'), findsOneWidget);
+          expect(find.text('Тестовая задача 2'), findsOneWidget);
+        });
+
+    testWidgets('shows subtasks when expanding task',
+            (WidgetTester tester) async {
+          // Arrange
+          when(mockDb.getTasks()).thenAnswer((_) => Future.value(mockTasks));
+
+          // Act
+          await tester.pumpWidget(createWidgetUnderTest());
+          await tester.pumpAndSettle();
+
+          // Находим и нажимаем кнопку раскрытия подзадач
+          final expandButton = find.byIcon(Icons.expand_more).first;
+          await tester.tap(expandButton);
+          await tester.pumpAndSettle();
+
+          // Assert
+          expect(find.text('Подзадача 1'), findsOneWidget);
+          expect(find.text('Подзадача 2'), findsOneWidget);
+        });
+  });
+
+  group('Task Completion Tests', () {
+    testWidgets('completes task when checkbox is tapped',
+            (WidgetTester tester) async {
+          // Arrange
+          when(mockDb.getTasks()).thenAnswer((_) => Future.value(mockTasks));
+          when(mockDb.completeTask(any)).thenAnswer((_) => Future.value());
+
+          // Act
+          await tester.pumpWidget(createWidgetUnderTest());
+          await tester.pumpAndSettle();
+
+          // Находим и нажимаем на чекбокс первой задачи
+          final checkbox = find.byType(Checkbox).first;
+          await tester.tap(checkbox);
+          await tester.pumpAndSettle();
+
+          // Assert
+          verify(mockDb.completeTask('1')).called(1);
+        });
+  });
+
+  group('Task Deletion Tests', () {
+    testWidgets('deletes task when delete button is tapped',
+            (WidgetTester tester) async {
+          // Arrange
+          when(mockDb.getTasks()).thenAnswer((_) => Future.value(mockTasks));
+          when(mockDb.deleteTask(any)).thenAnswer((_) => Future.value(1));
+
+          // Act
+          await tester.pumpWidget(createWidgetUnderTest());
+          await tester.pumpAndSettle();
+
+          // Находим и нажимаем кнопку удаления
+          final deleteButton = find.byIcon(Icons.delete_outline).first;
+          await tester.tap(deleteButton);
+          await tester.pumpAndSettle();
+
+          // Assert
+          verify(mockDb.deleteTask('1')).called(1);
+        });
   });
 }

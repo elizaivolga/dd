@@ -5,14 +5,19 @@ import '../screens/add_task_screen.dart';
 import 'package:intl/intl.dart';
 
 class TasksScreen extends StatefulWidget {
-  const TasksScreen({Key? key}) : super(key: key);
+  final DatabaseHelper databaseHelper;
+
+  const TasksScreen({
+    Key? key,
+    required this.databaseHelper,
+  }) : super(key: key);
 
   @override
   State<TasksScreen> createState() => _TasksScreenState();
 }
 
 class _TasksScreenState extends State<TasksScreen> {
-  final DatabaseHelper _db = DatabaseHelper();
+  DatabaseHelper get _db => widget.databaseHelper;
   List<Task> _tasks = [];
   bool _isLoading = false;
   Set<String> _expandedTasks = {};
@@ -128,18 +133,32 @@ class _TasksScreenState extends State<TasksScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 const SizedBox(height: 4),
-                Text(
-                  _dateFormat.format(task.dueDate),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: task.dueDate.isBefore(DateTime(
-                      DateTime.now().year,
-                      DateTime.now().month,
-                      DateTime.now().day,
-                    )) && !task.isCompleted
-                        ? Colors.red
-                        : Colors.grey[600],
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      _dateFormat.format(task.dueDate),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: task.dueDate.isBefore(DateTime(
+                          DateTime.now().year,
+                          DateTime.now().month,
+                          DateTime.now().day,
+                        )) && !task.isCompleted
+                            ? Colors.red
+                            : Colors.grey[600],
+                      ),
+                    ),
+                    if (hasSubTasks) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        '${task.subTasks.where((st) => st.isCompleted).length}/${task.subTasks.length} подзадач',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -210,21 +229,71 @@ class _TasksScreenState extends State<TasksScreen> {
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: task.subTasks.length,
                 itemBuilder: (context, index) {
+                  final subTask = task.subTasks[index];
                   return ListTile(
                     dense: true,
-                    leading: const SizedBox(
-                      width: 40,
-                      child: Icon(
-                        Icons.subdirectory_arrow_right,
+                    leading: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          width: 24,
+                          child: Icon(
+                            Icons.subdirectory_arrow_right,
+                            size: 20,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        Checkbox(
+                          value: subTask.isCompleted,
+                          onChanged: task.isCompleted ? null : (bool? value) async {
+                            if (value != null) {
+                              setState(() {
+                                subTask.isCompleted = value;
+                              });
+
+                              // Создаем новый список подзадач с обновленным статусом
+                              final updatedTask = task.copyWith(
+                                subTasks: List<SubTask>.from(task.subTasks),
+                              );
+
+                              // Проверяем, все ли подзадачи выполнены
+                              final allSubTasksCompleted = updatedTask.subTasks
+                                  .every((subTask) => subTask.isCompleted);
+
+                              // Если все подзадачи выполнены, отмечаем основную задачу как выполненную
+                              if (allSubTasksCompleted && !updatedTask.isCompleted) {
+                                await _toggleTaskCompletion(updatedTask);
+                              } else {
+                                // Иначе просто обновляем задачу в базе данных
+                                await _db.updateTask(updatedTask);
+                              }
+                            }
+                          },
+                          activeColor: Colors.green,
+                        ),
+                      ],
+                    ),
+                    title: Text(
+                      subTask.text,
+                      style: TextStyle(
+                        fontSize: 14,
+                        decoration: subTask.isCompleted ? TextDecoration.lineThrough : null,
+                        color: subTask.isCompleted ? Colors.grey : null,
+                      ),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(
+                        Icons.delete_outline,
                         size: 20,
                         color: Colors.grey,
                       ),
-                    ),
-                    title: Text(
-                      task.subTasks[index],
-                      style: const TextStyle(
-                        fontSize: 14,
-                      ),
+                      onPressed: () async {
+                        setState(() {
+                          task.subTasks.removeAt(index);
+                        });
+                        // Обновляем задачу в базе данных
+                        await _db.updateTask(task);
+                      },
                     ),
                   );
                 },

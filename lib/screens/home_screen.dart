@@ -26,13 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   DateTime _selectedDate = DateTime.now();
   final DateFormat _dateFormat = DateFormat('dd MMMM yyyy', 'ru');
 
-  final List<Widget> _screens = [
-    const TasksScreen(),
-    const CalendarScreen(),
-    const NotesScreen(),
-    const RewardsScreen(),
-    const StatisticsScreen(),
-  ];
+  late List<Widget> _screens;
 
   final List<String> _titles = [
     'Задачи',
@@ -45,8 +39,17 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    // Инициализируем _screens здесь
+    _screens = [
+      TasksScreen(databaseHelper: _databaseHelper),
+      const CalendarScreen(),
+      const NotesScreen(),
+      const RewardsScreen(),
+      const StatisticsScreen(),
+    ];
     _loadTasks();
   }
+
 
   Future<void> _loadTasks() async {
     try {

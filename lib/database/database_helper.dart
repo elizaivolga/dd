@@ -132,10 +132,45 @@ class DatabaseHelper {
     try {
       final db = await database;
       final taskMap = task.toMap();
-      if (taskMap['subTasks'] != null) {
-        taskMap['subTasks'] = jsonEncode(task.subTasks);
+
+      // Преобразуем подзадачи в JSON
+      if (task.subTasks.isNotEmpty) {
+        final subTasksJson = task.subTasks.map((subTask) => {
+          'text': subTask.text,
+          'isCompleted': subTask.isCompleted,
+        }).toList();
+        taskMap['subTasks'] = jsonEncode(subTasksJson);
+      } else {
+        taskMap['subTasks'] = null;
       }
-      return await db.insert('tasks', taskMap, conflictAlgorithm: ConflictAlgorithm.replace);
+
+
+      final dateStr = task.dueDate.toIso8601String().split('T')[0];
+
+      final List<Map<String, dynamic>> statsData = await db.query(
+        'statistics',
+        where: 'date = ?',
+        whereArgs: [dateStr],
+      );
+
+      final completed = (statsData.isEmpty ? 0 : statsData.first['tasksCompleted'] as int);
+      final total = (statsData.isEmpty ? 1 : statsData.first['totalTasks'] as int) + 1;
+
+      await db.insert(
+        'statistics',
+        {
+          'date': dateStr,
+          'tasksCompleted': completed,
+          'totalTasks': total,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      return await db.insert(
+        'tasks',
+        taskMap,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
     } catch (e) {
       throw DatabaseException('Ошибка при добавлении задачи: $e');
     }
@@ -150,15 +185,23 @@ class DatabaseHelper {
       );
 
       return maps.map((map) {
-        List<String> subTasks = [];
+        // Парсим подзадачи из JSON
+        List<SubTask> subTasks = [];
         if (map['subTasks'] != null) {
           try {
-            subTasks = List<String>.from(jsonDecode(map['subTasks']));
+            final List<dynamic> subTasksData = jsonDecode(map['subTasks']);
+            subTasks = subTasksData.map((subTaskMap) => SubTask(
+              text: subTaskMap['text'] as String,
+              isCompleted: subTaskMap['isCompleted'] as bool,
+            )).toList();
           } catch (e) {
             print('Ошибка при разборе подзадач: $e');
+            // В случае ошибки возвращаем пустой список подзадач
+            subTasks = [];
           }
         }
 
+        // Создаем объект Task
         return Task(
           id: map['id'],
           title: map['title'],
@@ -190,12 +233,17 @@ class DatabaseHelper {
       );
 
       return maps.map((map) {
-        List<String> subTasks = [];
+        List<SubTask> subTasks = [];
         if (map['subTasks'] != null) {
           try {
-            subTasks = List<String>.from(jsonDecode(map['subTasks']));
+            final List<dynamic> subTasksJson = jsonDecode(map['subTasks']);
+            subTasks = subTasksJson.map((subTaskMap) => SubTask(
+              text: subTaskMap['text'] as String,
+              isCompleted: subTaskMap['isCompleted'] as bool,
+            )).toList();
           } catch (e) {
             print('Ошибка при разборе подзадач: $e');
+            subTasks = [];
           }
         }
 
@@ -248,16 +296,51 @@ class DatabaseHelper {
 
         if (taskData.isEmpty) return;
 
-        final task = Task.fromMap(taskData.first);
+        final taskMap = taskData.first;
+        List<SubTask> subTasks = [];
+
+        // Правильно парсим подзадачи из JSON
+        if (taskMap['subTasks'] != null) {
+          try {
+            final List<dynamic> subTasksJson = jsonDecode(taskMap['subTasks']);
+            subTasks = subTasksJson.map((subTaskMap) => SubTask(
+              text: subTaskMap['text'] as String,
+              isCompleted: true, // Помечаем все подзадачи как выполненные
+            )).toList();
+          } catch (e) {
+            print('Ошибка при разборе подзадач: $e');
+            subTasks = [];
+          }
+        }
+
+        final task = Task(
+          id: taskMap['id'],
+          title: taskMap['title'],
+          description: taskMap['description'],
+          dueDate: DateTime.parse(taskMap['dueDate']),
+          isCompleted: true,
+          createdAt: DateTime.parse(taskMap['createdAt']),
+          difficulty: TaskDifficulty.values[taskMap['difficulty'] ?? 0],
+          subTasks: subTasks,
+          experiencePoints: taskMap['experiencePoints'] ?? 0,
+        );
+
         final xpToAdd = task.getExperiencePoints();
 
-        // Обновляем статус задачи
+        // Обновляем задачу с новыми подзадачами
+        final updatedTaskMap = task.toMap();
+        if (subTasks.isNotEmpty) {
+          final subTasksJson = subTasks.map((subTask) => {
+            'text': subTask.text,
+            'isCompleted': subTask.isCompleted,
+          }).toList();
+          updatedTaskMap['subTasks'] = jsonEncode(subTasksJson);
+        }
+
+        // Обновляем статус задачи и подзадач
         await txn.update(
           'tasks',
-          {
-            'isCompleted': 1,
-            'experiencePoints': xpToAdd,
-          },
+          updatedTaskMap,
           where: 'id = ?',
           whereArgs: [taskId],
         );
@@ -283,7 +366,7 @@ class DatabaseHelper {
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
 
-        // Обновляем статистику внутри той же транзакции
+        // Обновляем статистику
         final today = DateTime.now();
         final dateStr = today.toIso8601String().split('T')[0];
 
@@ -294,7 +377,7 @@ class DatabaseHelper {
         );
 
         final completed = (statsData.isEmpty ? 0 : statsData.first['tasksCompleted'] as int) + 1;
-        final total = statsData.isEmpty ? 1 : statsData.first['totalTasks'] as int;
+        final total = (statsData.isEmpty ? 1 : statsData.first['totalTasks'] as int) + 1;
 
         await txn.insert(
           'statistics',
@@ -542,6 +625,35 @@ class DatabaseHelper {
       );
     } catch (e) {
       throw DatabaseException('Ошибка при обновлении статистики: $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getStatisticsForLastDays(int days) async {
+    try {
+      final db = await database;
+      final now = DateTime.now();
+      final List<Map<String, dynamic>> result = [];
+
+      // Получаем статистику за каждый день
+      for (int i = days - 1; i >= 0; i--) {
+        final date = DateTime(now.year, now.month, now.day - i);
+        final dateStr = date.toIso8601String().split('T')[0];
+
+        final List<Map<String, dynamic>> dayStats = await db.query(
+          'statistics',
+          where: 'date = ?',
+          whereArgs: [dateStr],
+        );
+
+        result.add({
+          'date': date,
+          'tasksCompleted': dayStats.isEmpty ? 0 : dayStats.first['tasksCompleted'] as int,
+        });
+      }
+
+      return result;
+    } catch (e) {
+      throw DatabaseException('Ошибка при получении статистики: $e');
     }
   }
 

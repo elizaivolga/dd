@@ -28,7 +28,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
   late DateTime _selectedDate;
   late TaskDifficulty _selectedDifficulty;
-  final List<String> _subTasks = [];
+  final List<SubTask> _subTasks = [];
   bool _isLoading = false;
 
   @override
@@ -55,7 +55,10 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     if (_subTaskController.text.isEmpty) return;
 
     setState(() {
-      _subTasks.add(_subTaskController.text);
+      _subTasks.add(SubTask(
+        text: _subTaskController.text,
+        isCompleted: false,
+      ));
       _subTaskController.clear();
     });
   }
@@ -66,45 +69,55 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     });
   }
 
+
+  void _reorderSubTasks(int oldIndex, int newIndex) {
+    setState(() {
+      if (newIndex > oldIndex) {
+        newIndex -= 1;
+      }
+      final SubTask item = _subTasks.removeAt(oldIndex);
+      _subTasks.insert(newIndex, item);
+    });
+  }
+
   Future<void> _saveTask() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
     try {
-      // Генерируем уникальный ID для новой задачи, используя timestamp и случайное число
       final taskId = widget.task?.id ??
           '${DateTime.now().millisecondsSinceEpoch}_${(1000 + Random().nextInt(9000))}';
 
-      // Используем текущее время UTC для новой задачи
       final now = DateTime.now().toUtc();
-
-      // Для существующей задачи используем её дату создания, для новой - текущее время
       final createdAt = widget.task?.createdAt ?? now;
 
-      // Убеждаемся, что у нас есть все необходимые данные
       if (_titleController.text.trim().isEmpty) {
         throw Exception('Название задачи не может быть пустым');
       }
 
-      // Создаем объект задачи
       final task = Task(
         id: taskId,
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim().isEmpty
             ? null
             : _descriptionController.text.trim(),
-        dueDate: DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day,
-            23, 59, 59).toUtc(), // Устанавливаем конец дня в UTC
+        dueDate: DateTime(
+          _selectedDate.year,
+          _selectedDate.month,
+          _selectedDate.day,
+          23,
+          59,
+          59,
+        ).toUtc(),
         isCompleted: widget.task?.isCompleted ?? false,
         createdAt: createdAt,
         difficulty: _selectedDifficulty,
-        subTasks: List<String>.from(_subTasks), // Создаем новый список
+        subTasks: List<SubTask>.from(_subTasks),
         experiencePoints: widget.task?.experiencePoints ?? 0,
       );
 
-      // Проверяем, что дата выполнения не в прошлом
-      if (task.dueDate.isBefore(now)) {
+      if (task.dueDate.isBefore(DateTime.now())) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -116,40 +129,32 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         return;
       }
 
-      // Сохраняем задачу в базу данных
       if (widget.task == null) {
-        // Создание новой задачи
         final result = await _db.insertTask(task);
         if (result <= 0) {
           throw Exception('Не удалось создать задачу');
         }
       } else {
-        // Обновление существующей задачи
         final result = await _db.updateTask(task);
         if (result <= 0) {
           throw Exception('Не удалось обновить задачу');
         }
       }
 
-      // Если все прошло успешно, закрываем экран
       if (mounted) {
-        // Показываем сообщение об успехе
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                widget.task == null
-                    ? 'Задача успешно создана'
-                    : 'Задача успешно обновлена'
+              widget.task == null
+                  ? 'Задача успешно создана'
+                  : 'Задача успешно обновлена',
             ),
             backgroundColor: Colors.green,
           ),
         );
-
-        // Возвращаемся на предыдущий экран с результатом true
         Navigator.pop(context, true);
       }
     } catch (e) {
-      // Обработка ошибок
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -167,7 +172,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         );
       }
     } finally {
-      // Сбрасываем состояние загрузки
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -255,8 +259,11 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                       for (var difficulty in TaskDifficulty.values)
                         RadioListTile<TaskDifficulty>(
                           title: Text(
-                            difficulty == TaskDifficulty.easy ? 'Легкая' :
-                            difficulty == TaskDifficulty.medium ? 'Средняя' : 'Сложная',
+                            difficulty == TaskDifficulty.easy
+                                ? 'Легкая'
+                                : difficulty == TaskDifficulty.medium
+                                ? 'Средняя'
+                                : 'Сложная',
                           ),
                           value: difficulty,
                           groupValue: _selectedDifficulty,
@@ -303,15 +310,34 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                       ),
                       if (_subTasks.isNotEmpty) ...[
                         const SizedBox(height: 8),
-                        ListView.builder(
+                        ReorderableListView.builder(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           itemCount: _subTasks.length,
+                          onReorder: _reorderSubTasks,
                           itemBuilder: (context, index) {
+                            final subTask = _subTasks[index];
                             return ListTile(
-                              title: Text(_subTasks[index]),
+                              key: Key('subtask_$index'),
+                              leading: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.drag_handle,
+                                    color: Colors.grey,
+                                  ),
+                                ],
+                              ),
+                              title: Text(
+                                subTask.text,
+                                style: TextStyle(
+                                  decoration: subTask.isCompleted
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                ),
+                              ),
                               trailing: IconButton(
-                                icon: const Icon(Icons.delete),
+                                icon: const Icon(Icons.clear_sharp),
                                 onPressed: () => _removeSubTask(index),
                               ),
                             );

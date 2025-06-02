@@ -1,10 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
-enum TaskDifficulty {
-  easy,    // Легкая
-  medium,  // Средняя
-  hard     // Сложная
+enum TaskDifficulty { easy, medium, hard }
+
+class SubTask {
+  final String text;
+  bool isCompleted;
+
+  SubTask({
+    required this.text,
+    this.isCompleted = false,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'text': text,
+      'isCompleted': isCompleted,
+    };
+  }
+
+  factory SubTask.fromMap(Map<String, dynamic> map) {
+    return SubTask(
+      text: map['text'],
+      isCompleted: map['isCompleted'] ?? false,
+    );
+  }
 }
 
 class Task {
@@ -12,86 +32,46 @@ class Task {
   final String title;
   final String? description;
   final DateTime dueDate;
-  bool isCompleted;
+  final bool isCompleted;
   final DateTime createdAt;
   final TaskDifficulty difficulty;
-  final List<String> subTasks;
-  int experiencePoints;
+  final List<SubTask> subTasks; // Изменено с List<String> на List<SubTask>
+  final int experiencePoints;
 
   Task({
-    required this.id,
+    String? id,
     required this.title,
     this.description,
     required this.dueDate,
     this.isCompleted = false,
-    required this.createdAt,
+    DateTime? createdAt,
     this.difficulty = TaskDifficulty.easy,
-    this.subTasks = const [],
+    List<SubTask>? subTasks,
     this.experiencePoints = 0,
-  });
+  })  : id = id ?? const Uuid().v4(),
+        createdAt = createdAt ?? DateTime.now(),
+        subTasks = subTasks ?? [];
 
-  // Метод для получения очков опыта в зависимости от сложности
   int getExperiencePoints() {
     switch (difficulty) {
       case TaskDifficulty.easy:
         return 10;
       case TaskDifficulty.medium:
-        return 15;
-      case TaskDifficulty.hard:
         return 20;
-      default:
-        return 10; // По умолчанию как за легкую задачу
+      case TaskDifficulty.hard:
+        return 30;
     }
   }
 
   Color getDifficultyColor() {
     switch (difficulty) {
-      case TaskDifficulty.hard:
-        return Colors.red.shade100;
-      case TaskDifficulty.medium:
-        return Colors.orange.shade100;
-      case TaskDifficulty.easy:
-        return Colors.green.shade100;
-    }
-  }
-
-  Color getDifficultyIconColor() {
-    switch (difficulty) {
-      case TaskDifficulty.hard:
-        return Colors.red;
-      case TaskDifficulty.medium:
-        return Colors.orange;
       case TaskDifficulty.easy:
         return Colors.green;
+      case TaskDifficulty.medium:
+        return Colors.orange;
+      case TaskDifficulty.hard:
+        return Colors.red;
     }
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'title': title,
-      'description': description,
-      'dueDate': dueDate.toIso8601String(),
-      'isCompleted': isCompleted ? 1 : 0,
-      'createdAt': createdAt.toIso8601String(),
-      'difficulty': difficulty.index,
-      'subTasks': subTasks.isNotEmpty ? subTasks : null, // Изменено здесь
-      'experiencePoints': experiencePoints,
-    };
-  }
-
-  factory Task.fromMap(Map<String, dynamic> map) {
-    return Task(
-      id: map['id'],
-      title: map['title'],
-      description: map['description'],
-      dueDate: DateTime.parse(map['dueDate']),
-      isCompleted: map['isCompleted'] == 1,
-      createdAt: DateTime.parse(map['createdAt']),
-      difficulty: TaskDifficulty.values[map['difficulty']],
-      subTasks: List<String>.from(map['subTasks'] ?? []),
-      experiencePoints: map['experiencePoints'] ?? 0,
-    );
   }
 
   Task copyWith({
@@ -102,7 +82,7 @@ class Task {
     bool? isCompleted,
     DateTime? createdAt,
     TaskDifficulty? difficulty,
-    List<String>? subTasks,
+    List<SubTask>? subTasks,
     int? experiencePoints,
   }) {
     return Task(
@@ -115,6 +95,36 @@ class Task {
       difficulty: difficulty ?? this.difficulty,
       subTasks: subTasks ?? this.subTasks,
       experiencePoints: experiencePoints ?? this.experiencePoints,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'dueDate': dueDate.toIso8601String(),
+      'isCompleted': isCompleted ? 1 : 0,
+      'createdAt': createdAt.toIso8601String(),
+      'difficulty': difficulty.index,
+      'subTasks': subTasks.map((st) => st.toMap()).toList(),
+      'experiencePoints': experiencePoints,
+    };
+  }
+
+  factory Task.fromMap(Map<String, dynamic> map) {
+    return Task(
+      id: map['id'],
+      title: map['title'],
+      description: map['description'],
+      dueDate: DateTime.parse(map['dueDate']),
+      isCompleted: map['isCompleted'] == 1,
+      createdAt: DateTime.parse(map['createdAt']),
+      difficulty: TaskDifficulty.values[map['difficulty'] ?? 0],
+      subTasks: (map['subTasks'] as List?)
+          ?.map((st) => SubTask.fromMap(st))
+          .toList() ?? [],
+      experiencePoints: map['experiencePoints'] ?? 0,
     );
   }
 }
