@@ -25,7 +25,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final DatabaseHelper _databaseHelper = DatabaseHelper();
   DateTime _selectedDate = DateTime.now();
   final DateFormat _dateFormat = DateFormat('dd MMMM yyyy', 'ru');
-
   late List<Widget> _screens;
 
   final List<String> _titles = [
@@ -39,21 +38,26 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Инициализируем _screens здесь
+    _updateScreens();
+    _loadTasks();
+  }
+
+  void _updateScreens() {
     _screens = [
-      TasksScreen(databaseHelper: _databaseHelper),
+      TasksScreen(
+        databaseHelper: _databaseHelper,
+        selectedDate: _selectedDate,
+      ),
       const CalendarScreen(),
       const NotesScreen(),
       const RewardsScreen(),
       const StatisticsScreen(),
     ];
-    _loadTasks();
   }
-
 
   Future<void> _loadTasks() async {
     try {
-      final tasks = await _databaseHelper.getTasks();
+      final tasks = await _databaseHelper.getTasksByDate(_selectedDate);
       if (mounted) {
         setState(() {
           _tasks.clear();
@@ -156,6 +160,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Создаем актуальный список экранов при каждой перерисовке
+    final currentScreens = [
+      TasksScreen(
+        databaseHelper: _databaseHelper,
+        selectedDate: _selectedDate,
+      ),
+      const CalendarScreen(),
+      const NotesScreen(),
+      const RewardsScreen(),
+      const StatisticsScreen(),
+    ];
+
     return Scaffold(
       drawer: _buildDrawer(),
       appBar: AppBar(
@@ -169,15 +185,48 @@ class _HomeScreenState extends State<HomeScreen> {
                   context: context,
                   initialDate: _selectedDate,
                   firstDate: DateTime(2024),
-                  lastDate: DateTime(2025),
+                  lastDate: DateTime(2025, 12, 31),
                   locale: const Locale('ru', 'RU'),
+                  builder: (context, child) {
+                    return Theme(
+                      data: Theme.of(context).copyWith(
+                        colorScheme: ColorScheme.light(
+                          primary: Theme.of(context).primaryColor,
+                          onPrimary: Colors.white,
+                          surface: Colors.white,
+                          onSurface: Colors.black,
+                        ),
+                        dialogBackgroundColor: Colors.white,
+                      ),
+                      child: child!,
+                    );
+                  },
+                  selectableDayPredicate: (DateTime date) {
+                    // Можно добавить ограничения на выбор дат
+                    return true;
+                  },
                 );
-                if (picked != null) {
+
+                if (picked != null && picked != _selectedDate) {
                   setState(() {
                     _selectedDate = picked;
+                    // Обновляем список экранов с новой датой
+                    _screens = [
+                      TasksScreen(
+                        databaseHelper: _databaseHelper,
+                        selectedDate: _selectedDate,
+                      ),
+                      const CalendarScreen(),
+                      const NotesScreen(),
+                      const RewardsScreen(),
+                      const StatisticsScreen(),
+                    ];
                   });
+                  // Перезагружаем задачи для выбранной даты
+                  await _loadTasks();
                 }
               },
+              tooltip: 'Выбрать дату',
             ),
         ],
       ),
@@ -195,7 +244,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           Expanded(
-            child: _screens[_selectedIndex],
+            child: currentScreens[_selectedIndex],
           ),
         ],
       ),
@@ -204,6 +253,7 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap: (index) {
           setState(() {
             _selectedIndex = index;
+            _screens = currentScreens;
           });
         },
         type: BottomNavigationBarType.fixed,

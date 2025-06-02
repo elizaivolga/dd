@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../models/task.dart';
 import '../database/database_helper.dart';
-import '../screens/add_task_screen.dart';
-import 'package:intl/intl.dart';
+import 'add_task_screen.dart';
 
 class TasksScreen extends StatefulWidget {
   final DatabaseHelper databaseHelper;
+  final DateTime selectedDate;
 
   const TasksScreen({
     Key? key,
     required this.databaseHelper,
+    required this.selectedDate,
   }) : super(key: key);
 
   @override
@@ -17,16 +19,24 @@ class TasksScreen extends StatefulWidget {
 }
 
 class _TasksScreenState extends State<TasksScreen> {
-  DatabaseHelper get _db => widget.databaseHelper;
+  final DatabaseHelper _db = DatabaseHelper();
   List<Task> _tasks = [];
   bool _isLoading = false;
   Set<String> _expandedTasks = {};
-  final _dateFormat = DateFormat('dd.MM.yyyy');
+  final DateFormat _dateFormat = DateFormat('dd.MM.yyyy');
 
   @override
   void initState() {
     super.initState();
     _loadTasks();
+  }
+
+  @override
+  void didUpdateWidget(TasksScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedDate != widget.selectedDate) {
+      _loadTasks();
+    }
   }
 
   Future<void> _loadTasks() async {
@@ -35,7 +45,7 @@ class _TasksScreenState extends State<TasksScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final loadedTasks = await _db.getTasks();
+      final loadedTasks = await widget.databaseHelper.getTasksByDate(widget.selectedDate);
       if (!mounted) return;
 
       setState(() {
@@ -60,11 +70,9 @@ class _TasksScreenState extends State<TasksScreen> {
   }
 
   Future<void> _toggleTaskCompletion(Task task) async {
-    // Если задача уже выполнена, ничего не делаем
     if (task.isCompleted) return;
 
     try {
-      // Обновляем состояние в UI
       setState(() {
         final index = _tasks.indexWhere((t) => t.id == task.id);
         if (index != -1) {
@@ -72,13 +80,9 @@ class _TasksScreenState extends State<TasksScreen> {
         }
       });
 
-      // Сохраняем в базу данных
-      await _db.completeTask(task.id);
-
-      // Перезагружаем задачи для обновления всех данных
+      await widget.databaseHelper.completeTask(task.id);
       await _loadTasks();
     } catch (e) {
-      // В случае ошибки возвращаем предыдущее состояние
       setState(() {
         final index = _tasks.indexWhere((t) => t.id == task.id);
         if (index != -1) {
@@ -91,7 +95,7 @@ class _TasksScreenState extends State<TasksScreen> {
 
   Future<void> _deleteTask(Task task) async {
     try {
-      await _db.deleteTask(task.id);
+      await widget.databaseHelper.deleteTask(task.id);
       setState(() {
         _tasks.removeWhere((t) => t.id == task.id);
         _expandedTasks.remove(task.id);
@@ -183,7 +187,9 @@ class _TasksScreenState extends State<TasksScreen> {
                   ),
                 Checkbox(
                   value: task.isCompleted,
-                  onChanged: task.isCompleted ? null : (bool? value) {
+                  onChanged: task.isCompleted
+                      ? null
+                      : (bool? value) {
                     if (value == true) {
                       _toggleTaskCompletion(task);
                     }
@@ -245,27 +251,25 @@ class _TasksScreenState extends State<TasksScreen> {
                         ),
                         Checkbox(
                           value: subTask.isCompleted,
-                          onChanged: task.isCompleted ? null : (bool? value) async {
+                          onChanged: task.isCompleted
+                              ? null
+                              : (bool? value) async {
                             if (value != null) {
                               setState(() {
                                 subTask.isCompleted = value;
                               });
 
-                              // Создаем новый список подзадач с обновленным статусом
                               final updatedTask = task.copyWith(
                                 subTasks: List<SubTask>.from(task.subTasks),
                               );
 
-                              // Проверяем, все ли подзадачи выполнены
-                              final allSubTasksCompleted = updatedTask.subTasks
-                                  .every((subTask) => subTask.isCompleted);
+                              final allSubTasksCompleted =
+                              updatedTask.subTasks.every((subTask) => subTask.isCompleted);
 
-                              // Если все подзадачи выполнены, отмечаем основную задачу как выполненную
                               if (allSubTasksCompleted && !updatedTask.isCompleted) {
                                 await _toggleTaskCompletion(updatedTask);
                               } else {
-                                // Иначе просто обновляем задачу в базе данных
-                                await _db.updateTask(updatedTask);
+                                await widget.databaseHelper.updateTask(updatedTask);
                               }
                             }
                           },
@@ -291,8 +295,7 @@ class _TasksScreenState extends State<TasksScreen> {
                         setState(() {
                           task.subTasks.removeAt(index);
                         });
-                        // Обновляем задачу в базе данных
-                        await _db.updateTask(task);
+                        await widget.databaseHelper.updateTask(task);
                       },
                     ),
                   );

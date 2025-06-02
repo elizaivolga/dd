@@ -21,9 +21,11 @@ import 'widget_test.mocks.dart';
 void main() {
   late MockDatabaseHelper mockDb;
   late List<Task> mockTasks;
+  late DateTime testDate;
 
   setUp(() {
     mockDb = MockDatabaseHelper();
+    testDate = DateTime(2024, 1, 1);
 
     // Создаем тестовые данные
     mockTasks = [
@@ -31,7 +33,7 @@ void main() {
         id: '1',
         title: 'Тестовая задача 1',
         description: 'Описание задачи 1',
-        dueDate: DateTime.now().add(const Duration(days: 1)),
+        dueDate: testDate.add(const Duration(days: 1)),
         subTasks: [
           SubTask(text: 'Подзадача 1', isCompleted: false),
           SubTask(text: 'Подзадача 2', isCompleted: true),
@@ -40,7 +42,7 @@ void main() {
       Task(
         id: '2',
         title: 'Тестовая задача 2',
-        dueDate: DateTime.now().subtract(const Duration(days: 1)),
+        dueDate: testDate.subtract(const Duration(days: 1)),
         isCompleted: true,
         subTasks: [],
       ),
@@ -51,16 +53,17 @@ void main() {
     return MaterialApp(
       home: TasksScreen(
         databaseHelper: mockDb,
+        selectedDate: testDate,
       ),
     );
   }
 
   group('TasksScreen Widget Tests', () {
-
     testWidgets('shows empty state when no tasks',
             (WidgetTester tester) async {
           // Arrange
-          when(mockDb.getTasks()).thenAnswer((_) => Future.value([]));
+          when(mockDb.getTasksByDate(any))
+              .thenAnswer((_) => Future.value([]));
 
           // Act
           await tester.pumpWidget(createWidgetUnderTest());
@@ -74,7 +77,8 @@ void main() {
     testWidgets('shows list of tasks when tasks exist',
             (WidgetTester tester) async {
           // Arrange
-          when(mockDb.getTasks()).thenAnswer((_) => Future.value(mockTasks));
+          when(mockDb.getTasksByDate(any))
+              .thenAnswer((_) => Future.value(mockTasks));
 
           // Act
           await tester.pumpWidget(createWidgetUnderTest());
@@ -88,7 +92,8 @@ void main() {
     testWidgets('shows subtasks when expanding task',
             (WidgetTester tester) async {
           // Arrange
-          when(mockDb.getTasks()).thenAnswer((_) => Future.value(mockTasks));
+          when(mockDb.getTasksByDate(any))
+              .thenAnswer((_) => Future.value(mockTasks));
 
           // Act
           await tester.pumpWidget(createWidgetUnderTest());
@@ -109,7 +114,8 @@ void main() {
     testWidgets('completes task when checkbox is tapped',
             (WidgetTester tester) async {
           // Arrange
-          when(mockDb.getTasks()).thenAnswer((_) => Future.value(mockTasks));
+          when(mockDb.getTasksByDate(any))
+              .thenAnswer((_) => Future.value(mockTasks));
           when(mockDb.completeTask(any)).thenAnswer((_) => Future.value());
 
           // Act
@@ -124,13 +130,40 @@ void main() {
           // Assert
           verify(mockDb.completeTask('1')).called(1);
         });
+
+    testWidgets('completes task when all subtasks are completed',
+            (WidgetTester tester) async {
+          // Arrange
+          when(mockDb.getTasksByDate(any))
+              .thenAnswer((_) => Future.value(mockTasks));
+          when(mockDb.updateTask(any)).thenAnswer((_) => Future.value(1));
+          when(mockDb.completeTask(any)).thenAnswer((_) => Future.value());
+
+          // Act
+          await tester.pumpWidget(createWidgetUnderTest());
+          await tester.pumpAndSettle();
+
+          // Раскрываем подзадачи
+          await tester.tap(find.byIcon(Icons.expand_more).first);
+          await tester.pumpAndSettle();
+
+          // Отмечаем первую подзадачу
+          final subtaskCheckbox = find.byType(Checkbox).at(1);
+          await tester.tap(subtaskCheckbox);
+          await tester.pumpAndSettle();
+
+          // Assert
+          verify(mockDb.updateTask(any)).called(1);
+          verify(mockDb.completeTask('1')).called(1);
+        });
   });
 
   group('Task Deletion Tests', () {
     testWidgets('deletes task when delete button is tapped',
             (WidgetTester tester) async {
           // Arrange
-          when(mockDb.getTasks()).thenAnswer((_) => Future.value(mockTasks));
+          when(mockDb.getTasksByDate(any))
+              .thenAnswer((_) => Future.value(mockTasks));
           when(mockDb.deleteTask(any)).thenAnswer((_) => Future.value(1));
 
           // Act

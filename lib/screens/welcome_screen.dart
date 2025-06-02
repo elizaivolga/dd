@@ -16,12 +16,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     {
       'title': 'Добро пожаловать в Plana',
       'description': 'Ваш личный помощник в планировании и достижении целей',
-      'icon': Icons.check_circle_outline,
+      'icon': Icons.task_alt,
     },
     {
       'title': 'Умное планирование',
       'description': 'Создавайте задачи, подзадачи и отслеживайте их выполнение',
-      'icon': Icons.task_alt,
+      'icon': Icons.note_alt_outlined,
     },
     {
       'title': 'Система достижений',
