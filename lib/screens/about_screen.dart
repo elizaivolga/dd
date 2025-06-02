@@ -30,12 +30,12 @@ class AboutScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             const Text(
-              'Приложение для планирования задач и достижения целей с элементами геймификации.',
+              'Приложение для планирования задач и достижения целей с элементами геймификации, разработанное в качестве дипломного проекта.',
               style: TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 24),
             Text(
-              '© 2024 ${DateTime.now().year} Все права защищены',
+              '© ${DateTime.now().year} ИСП-221с Иволгина Е.С.',
               style: TextStyle(
                 color: Colors.grey[600],
               ),

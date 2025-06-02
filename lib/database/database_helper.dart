@@ -703,6 +703,7 @@ class DatabaseHelper {
     }
   }
 
+
   Future<void> close() async {
     if (_database != null) {
       await _database!.close();
