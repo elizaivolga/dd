@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 import 'screens/home_screen.dart';
@@ -9,6 +10,43 @@ import 'database/database_helper.dart';
 import 'providers/app_state.dart';
 
 void main() {
+  AwesomeNotifications().initialize(
+      null,
+      [
+        NotificationChannel(
+          channelKey: 'basic_channel',
+          channelName: 'Basic Notifications',
+          channelDescription: 'Notification channel for basic tests',
+          defaultColor: const Color(0xFF9D50DD),
+          ledColor: Colors.white,
+          importance: NotificationImportance.High,
+        )
+      ],
+      debug: true
+  );
+
+  void scheduleDailyNotification() async {
+    AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: 1,
+        channelKey: 'basic_channel',
+        title: 'Ежедневное напоминание',
+        body: 'Пока строить планы на день!',
+        notificationLayout: NotificationLayout.Default,
+      ),
+      schedule: NotificationCalendar(
+          hour: 9, // в 9:00 утра каждый день
+          minute: 0,
+          second: 0,
+          millisecond: 0,
+          repeats: true,
+          timeZone: await AwesomeNotifications().getLocalTimeZoneIdentifier(),
+    ),
+    );
+  };
+
+  scheduleDailyNotification();
+
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
 

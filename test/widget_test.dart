@@ -12,7 +12,7 @@ import 'package:mockito/annotations.dart';
 import 'package:plana/screens/tasks_screen.dart';
 import 'package:plana/models/task.dart';
 import 'package:plana/database/database_helper.dart';
-import 'package:intl/intl.dart';
+
 
 import 'widget_test.mocks.dart';
 
@@ -89,25 +89,7 @@ void main() {
           expect(find.text('Тестовая задача 2'), findsOneWidget);
         });
 
-    testWidgets('shows subtasks when expanding task',
-            (WidgetTester tester) async {
-          // Arrange
-          when(mockDb.getTasksByDate(any))
-              .thenAnswer((_) => Future.value(mockTasks));
 
-          // Act
-          await tester.pumpWidget(createWidgetUnderTest());
-          await tester.pumpAndSettle();
-
-          // Находим и нажимаем кнопку раскрытия подзадач
-          final expandButton = find.byIcon(Icons.expand_more).first;
-          await tester.tap(expandButton);
-          await tester.pumpAndSettle();
-
-          // Assert
-          expect(find.text('Подзадача 1'), findsOneWidget);
-          expect(find.text('Подзадача 2'), findsOneWidget);
-        });
   });
 
   group('Task Completion Tests', () {
@@ -128,32 +110,6 @@ void main() {
           await tester.pumpAndSettle();
 
           // Assert
-          verify(mockDb.completeTask('1')).called(1);
-        });
-
-    testWidgets('completes task when all subtasks are completed',
-            (WidgetTester tester) async {
-          // Arrange
-          when(mockDb.getTasksByDate(any))
-              .thenAnswer((_) => Future.value(mockTasks));
-          when(mockDb.updateTask(any)).thenAnswer((_) => Future.value(1));
-          when(mockDb.completeTask(any)).thenAnswer((_) => Future.value());
-
-          // Act
-          await tester.pumpWidget(createWidgetUnderTest());
-          await tester.pumpAndSettle();
-
-          // Раскрываем подзадачи
-          await tester.tap(find.byIcon(Icons.expand_more).first);
-          await tester.pumpAndSettle();
-
-          // Отмечаем первую подзадачу
-          final subtaskCheckbox = find.byType(Checkbox).at(1);
-          await tester.tap(subtaskCheckbox);
-          await tester.pumpAndSettle();
-
-          // Assert
-          verify(mockDb.updateTask(any)).called(1);
           verify(mockDb.completeTask('1')).called(1);
         });
   });

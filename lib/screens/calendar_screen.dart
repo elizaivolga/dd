@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import '../models/event.dart';
@@ -25,6 +26,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
   // Константы для текущей даты и пользователя
   static const String currentUser = 'elizaivolga';
   static final DateTime currentDate = DateTime.parse('2025-06-02 00:08:52');
+
+  int createUniqueId() {
+    return DateTime.now().millisecondsSinceEpoch.remainder(100000);
+  }
 
   @override
   void initState() {
@@ -284,6 +289,50 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
       try {
         if (event == null) {
+          final notificationTime = startTime.subtract(const Duration(minutes: 15));
+          await AwesomeNotifications().createNotification(
+            content: NotificationContent(
+              id: createUniqueId(),
+              channelKey: 'basic_channel',
+              title: 'Напоминание о событии через час ${newEvent.title}',
+              body:  'Не забудь!',
+              notificationLayout: NotificationLayout.Default,
+            ),
+            schedule: NotificationCalendar(
+              year: notificationTime.year,
+              month: notificationTime.month,
+              day: notificationTime.day,
+              hour: notificationTime.hour,
+              minute: notificationTime.minute,
+              second: 0,
+              millisecond: 0,
+              repeats: false,
+              timeZone: await AwesomeNotifications().getLocalTimeZoneIdentifier(),
+            ),
+          );
+
+          final notificationTimeDay = startTime.subtract(const Duration(days: 1));
+          await AwesomeNotifications().createNotification(
+            content: NotificationContent(
+              id: createUniqueId(),
+              channelKey: 'basic_channel',
+              title: 'Напоминание о завтрашнем  событии ${newEvent.title}',
+              body:  'Не забудь!',
+              notificationLayout: NotificationLayout.Default,
+            ),
+            schedule: NotificationCalendar(
+              year: notificationTimeDay.year,
+              month: notificationTimeDay.month,
+              day: notificationTimeDay.day,
+              hour: notificationTimeDay.hour,
+              minute: notificationTimeDay.minute,
+              second: 0,
+              millisecond: 0,
+              repeats: false,
+              timeZone: await AwesomeNotifications().getLocalTimeZoneIdentifier(),
+            ),
+          );
+
           await _db.insertEvent(newEvent);
         } else {
           await _db.updateEvent(newEvent);
